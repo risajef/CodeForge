@@ -32,7 +32,7 @@ PYTHON
     if [ "$operation" = verify ]; then
         exec apb -batch -autoproof -html
     fi
-    apb -c_compile -batch
+    CC=/usr/local/bin/codeforge-eiffel-cc apb -c_compile -batch
     if [ "$operation" = compile ]; then
         test -x ./EIFGENs/tests/W_code/autoproof-tests
     else

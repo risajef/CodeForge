@@ -144,7 +144,9 @@ WORKDIR /precomp
 RUN rm -rf EIFGENs \
     && apb -config /library/base/base.ecf -target base -precompile -c_compile -batch \
     && test -s EIFGENs/base/W_code/preobj.o
-RUN strip --strip-debug EIFGENs/base/W_code/driver EIFGENs/base/W_code/preobj.o \
+RUN mkdir pattern-cache \
+    && cp EIFGENs/base/W_code/E1/epattern.c EIFGENs/base/W_code/E1/epattern.o pattern-cache/ \
+    && strip --strip-debug EIFGENs/base/W_code/driver EIFGENs/base/W_code/preobj.o \
     && rm -rf EIFGENs/base/W_code/C[0-9]* EIFGENs/base/W_code/E[0-9]* /opt/eiffel/library \
     && ln -s /library /opt/eiffel/library
 WORKDIR /workspace

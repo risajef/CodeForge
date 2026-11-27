@@ -30,9 +30,9 @@ jobs:
         run: |
           python -m pip install Jinja2==3.1.6
           python pages/assemble.py dist
-          mkdir -p dist/runtime-v4
-          gh release download pages-runtime-v4 --pattern '*.tar' --dir "${RUNNER_TEMP}"
-          tar -xf "${RUNNER_TEMP}/codeforge-pages-runtime-v4.tar" -C dist/runtime-v4
+          mkdir -p dist/runtime-v5
+          gh release download pages-runtime-v5 --pattern '*.tar' --dir "${RUNNER_TEMP}"
+          tar -xf "${RUNNER_TEMP}/codeforge-pages-runtime-v5.tar" -C dist/runtime-v5
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

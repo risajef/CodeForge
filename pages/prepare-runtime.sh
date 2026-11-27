@@ -14,13 +14,15 @@ mkdir -p "$output"
 "$engine" build --target browser-pages-full -f "$repo/docker/Dockerfile.eiffel" -t codeforge-pages:runtime "$repo/docker"
 cp "$repo/pages/guest-init.sh" "$scratch/codeforge-init"
 cp "$repo/pages/guest-run.sh" "$scratch/codeforge-run"
-chmod 0755 "$scratch/"codeforge-{init,run}
+cp "$repo/pages/guest-eiffel-cc.sh" "$scratch/codeforge-eiffel-cc"
+chmod 0755 "$scratch/"codeforge-{init,run,eiffel-cc}
 sed '/{% if USE_SPECIFIC_ROOT %}/,/{% else %}/d; /{% endif %}/d; s|../precomp|/precomp|' "$repo/examples/ecf_template.xml" > "$scratch/Ace.ecf"
 cat > "$scratch/Dockerfile" <<'DOCKERFILE'
 FROM codeforge-pages:runtime
 USER root
 COPY codeforge-init /usr/local/sbin/codeforge-init
 COPY codeforge-run /usr/local/bin/codeforge-run
+COPY codeforge-eiffel-cc /usr/local/bin/codeforge-eiffel-cc
 COPY Ace.ecf /opt/codeforge/Ace.ecf
 DOCKERFILE
 "$engine" build -t codeforge-pages:disk "$scratch"

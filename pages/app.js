@@ -1,4 +1,5 @@
 (() => {
+const runtime = './runtime-v5/';
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const sent = new Map();
@@ -55,8 +56,8 @@ function receive(data) {
 
 async function loadDisk() {
     const [size, disk] = await Promise.all([
-        fetch('./runtime-v4/disk-size.txt'),
-        fetch('./runtime-v4/eiffel.ext4.gz'),
+        fetch(runtime + 'disk-size.txt'),
+        fetch(runtime + 'eiffel.ext4.gz'),
     ]);
     if (!size.ok || !disk.ok) throw new Error('The browser VM download is unavailable.');
     const bytes = new Uint8Array(Number(await size.text()));
@@ -80,8 +81,8 @@ async function startVM(updatePhase) {
     updatePhase('Downloading the browser VM on first use…');
     const [bytes] = await Promise.all([
         loadDisk(),
-        getScript('./runtime-v4/xterm.js'),
-        getScript('./runtime-v4/pty.js'),
+        getScript(runtime + 'xterm.js'),
+        getScript(runtime + 'pty.js'),
     ]);
     const term = new Terminal();
     term.write = (data, done) => { receive(data); done?.(); };
@@ -92,12 +93,12 @@ async function startVM(updatePhase) {
     slave.onReadable(() => callbacks.splice(0).forEach(callback => callback()));
     const config = {
         pty: slave,
-        mainScriptUrlOrBlob: new URL('./runtime-v4/out.js', location.href).href,
-        locateFile: file => new URL('./runtime-v4/' + file, location.href).href,
+        mainScriptUrlOrBlob: new URL(runtime + 'out.js', location.href).href,
+        locateFile: file => new URL(runtime + file, location.href).href,
         preRun: [],
     };
     window.Module = config;
-    await getScript('./runtime-v4/load.js');
+    await getScript(runtime + 'load.js');
     config.preRun.push(mod => {
         mod.FS.writeFile('/pack/eiffel.ext4', bytes, {canOwn: true});
         mod.TTY.stream_ops.poll = (stream, timeout, callback) => {
@@ -119,7 +120,7 @@ async function startVM(updatePhase) {
         '-kernel', '/pack/bzImage',
         '-append', 'console=ttyS0 root=/dev/vda rootwait ro init=/usr/local/sbin/codeforge-init loglevel=4',
     ];
-    const {default: initialize} = await import('./runtime-v4/out.js');
+    const {default: initialize} = await import(runtime + 'out.js');
     const ready = response(line => line.endsWith('CF_READY'), 120000);
     updatePhase('Starting the browser VM…');
     await Promise.all([ready, initialize(config)]);
@@ -278,7 +279,7 @@ async function request(path, options) {
         const name = decodeURIComponent(second).toUpperCase();
         const mapped = mappings[name] || name;
         if (/^[A-Z][A-Z0-9_]*$/.test(mapped)) {
-            const source = await fetch('./runtime-v4/library/' + mapped + '.e');
+            const source = await fetch(runtime + 'library/' + mapped + '.e');
             if (source.ok) return json({success: true, mapped_class_name: mapped, source_code: await source.text()});
         }
         return json({success: false, message: 'Class ' + name + ' is unavailable.'});
