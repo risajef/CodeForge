@@ -1,5 +1,5 @@
 (() => {
-const runtime = './runtime-v6/';
+const runtime = './runtime-v7/';
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const sent = new Map();

@@ -11,9 +11,10 @@ case "$*" in
             exec cp "$cache/epattern.o" epattern.o
         fi
         ;;
-    "$workbench eoption.c"|"$workbench efrozen.c"|"$workbench ecall.c"|"$workbench eskelet.c"|\
-    "$workbench enames.c"|"$workbench evisib.c"|"$workbench eparents.c")
-        # These generated translation units contain runtime data tables.
+    "$workbench eoption.c"|"$workbench efrozen.c"|"$workbench ecall.c"|"$workbench eplug.c"|\
+    "$workbench eskelet.c"|"$workbench enames.c"|"$workbench evisib.c"|"$workbench ececil.c"|\
+    "$workbench einit.c"|"$workbench eparents.c"|"$workbench emain.c")
+        # Compile the generated Workbench support files with TinyCC.
         if tcc "$@"; then exit 0; fi
         printf 'Retrying Eiffel table compilation with GCC.\n' >&2
         ;;
