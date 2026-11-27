@@ -11,19 +11,25 @@ cleanup() {
 }
 trap cleanup EXIT
 mkdir -p "$output"
-"$engine" build --target browser-pages -f "$repo/docker/Dockerfile.eiffel" -t codeforge-pages:runtime "$repo/docker"
+"$engine" build --target browser-pages-full -f "$repo/docker/Dockerfile.eiffel" -t codeforge-pages:runtime "$repo/docker"
 cp "$repo/pages/guest-init.sh" "$scratch/codeforge-init"
-chmod 0755 "$scratch/codeforge-init"
-sed '/{% if USE_SPECIFIC_ROOT %}/,/{% else %}/d; /{% endif %}/d' "$repo/examples/ecf_template.xml" > "$scratch/Ace.ecf"
+cp "$repo/pages/guest-run.sh" "$scratch/codeforge-run"
+chmod 0755 "$scratch/"codeforge-{init,run}
+sed '/{% if USE_SPECIFIC_ROOT %}/,/{% else %}/d; /{% endif %}/d; s|../precomp|/precomp|' "$repo/examples/ecf_template.xml" > "$scratch/Ace.ecf"
 cat > "$scratch/Dockerfile" <<'DOCKERFILE'
 FROM codeforge-pages:runtime
+USER root
 COPY codeforge-init /usr/local/sbin/codeforge-init
+COPY codeforge-run /usr/local/bin/codeforge-run
 COPY Ace.ecf /opt/codeforge/Ace.ecf
 DOCKERFILE
 "$engine" build -t codeforge-pages:disk "$scratch"
 container=$("$engine" create codeforge-pages:disk)
-"$engine" export "$container" | mke2fs -q -F -t ext4 -O '^has_journal' -m 0 -d - "$scratch/eiffel.ext4" 1200M
-gzip -1 -c "$scratch/eiffel.ext4" > "$output/eiffel.ext4.gz"
+"$engine" cp "$container:/library" "$scratch/library"
+python3 "$repo/pages/build-library.py" "$scratch/library" "$output/library"
+"$engine" export "$container" | mke2fs -q -F -t ext4 -O '^has_journal' -m 0 -d - "$scratch/eiffel.ext4" 1320M
+stat -c '%s' "$scratch/eiffel.ext4" > "$output/disk-size.txt"
+gzip -3 -c "$scratch/eiffel.ext4" > "$output/eiffel.ext4.gz"
 cp "$qemu/"{load.js,out.js,qemu-system-x86_64.data,qemu-system-x86_64.wasm} "$output/"
 if command -v wasm-strip >/dev/null; then wasm-strip "$output/qemu-system-x86_64.wasm"; fi
 curl -fsSL https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js -o "$output/xterm.js"

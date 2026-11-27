@@ -10,30 +10,65 @@ mount -t tmpfs -o uid=1000,gid=1000 tmpfs /workspace
 mkdir -p /dev/shm
 mount -t tmpfs -o mode=1777 tmpfs /dev/shm
 stty -echo
-cp /opt/codeforge/Ace.ecf /workspace/
-cd /workspace
+for language in eiffel python c cpp java; do
+    install -d -o coderunner -g coderunner "/workspace/$language"
+done
+
+run_job() {
+    runuser -u coderunner -- timeout -k 3 "$1" /usr/local/bin/codeforge-run "$2" "$3" "$4" \
+        </dev/null >/run/codeforge-output 2>&1 &
+    child=$!
+    printf '%s\n' "$child" >/run/codeforge-pid
+    result=0
+    wait "$child" || result=$?
+    printf '%s\n' "$result" >/run/codeforge-exit
+}
+
+cd /workspace/eiffel
+language=eiffel
 printf 'CF_READY\n'
-while IFS=' ' read -r op value; do
+while IFS=' ' read -r op value operation seconds main; do
     status=0
     case "$op" in
-        BEGIN) : > /tmp/source ;;
-        CHUNK) printf '%s' "$value" | base64 -d >> /tmp/source || status=$? ;;
+        LANGUAGE)
+            case "$value" in
+                eiffel|python|c|cpp|java) cd "/workspace/$value"; language=$value ;;
+                *) status=1 ;;
+            esac
+            ;;
+        BEGIN) : > /run/codeforge-source ;;
+        CHUNK) printf '%s' "$value" | base64 -d >> /run/codeforge-source || status=$? ;;
         SAVE|REMOVE)
-            case "$value" in ''|.*|*[!a-zA-Z0-9_.-]*) status=1 ;; esac
-            case "$value" in *.e) ;; *) status=1 ;; esac
+            case "$value" in ''|[!a-zA-Z0-9_]*|*[!a-zA-Z0-9_.-]*) status=1 ;; esac
             if [ "$status" -eq 0 ]; then
                 if [ "$op" = REMOVE ]; then
-                    if [ -f "$value" ]; then unlink "$value" || status=$?; fi
-                elif ! cmp -s /tmp/source "$value"; then
-                    install -o coderunner -g coderunner -m 0644 /tmp/source "$value" || status=$?
+                    rm -f -- "$value" || status=$?
+                elif ! cmp -s /run/codeforge-source "$value"; then
+                    install -o coderunner -g coderunner -m 0644 /run/codeforge-source "$value" || status=$?
                 fi
             fi
             ;;
-        VERIFY)
-            runuser -u coderunner -- apb -batch -autoproof -html > /tmp/proof || status=$?
-            printf 'CF_RESULT '
-            base64 -w0 /tmp/proof
-            printf '\n'
+        START)
+            # START carries language, operation, timeout and main filename.
+            if [ "$value" != "$language" ] || [ -z "$main" ] || [ -e /run/codeforge-pid ]; then
+                status=1
+            else
+                run_job "$seconds" "$language" "$operation" "$main" &
+                while [ ! -s /run/codeforge-pid ]; do sleep 0.01; done
+            fi
+            ;;
+        RESULT)
+            if [ -s /run/codeforge-exit ]; then
+                printf 'CF_DONE %s ' "$(cat /run/codeforge-exit)"
+                head -c 524288 /run/codeforge-output | base64 -w0
+                printf '\n'
+                rm -f /run/codeforge-exit /run/codeforge-pid
+            fi
+            ;;
+        CANCEL)
+            if [ -s /run/codeforge-pid ] && [ ! -s /run/codeforge-exit ]; then
+                kill -TERM "$(cat /run/codeforge-pid)" 2>/dev/null || :
+            fi
             ;;
         *) status=1 ;;
     esac

@@ -58,7 +58,11 @@ class CodeCompilerApp {
             
             // Clean up session containers when language changes (non-blocking)
             try {
-                await this.sessionManager.cleanupOnLanguageChange();
+                if (window.codeforgeBrowser) {
+                    this.fileManager.loadFiles([]);
+                } else {
+                    await this.sessionManager.cleanupOnLanguageChange();
+                }
             } catch (error) {
                 console.warn('Session cleanup failed but continuing with language change:', error);
             }
@@ -111,14 +115,14 @@ class CodeCompilerApp {
         // Handle page refresh/reload - cleanup sessions
         window.addEventListener('beforeunload', () => {
             // Use sendBeacon for reliable cleanup on page unload
-            this.sessionManager.cleanupOnRefreshBeacon();
+            if (!window.codeforgeBrowser) this.sessionManager.cleanupOnRefreshBeacon();
         });
 
         // Handle page visibility change (more reliable than beforeunload)
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'hidden') {
                 // Page is being hidden (possibly closed or minimized)
-                this.sessionManager.cleanupOnRefreshBeacon();
+                if (!window.codeforgeBrowser) this.sessionManager.cleanupOnRefreshBeacon();
             }
         });
 
@@ -183,6 +187,7 @@ class CodeCompilerApp {
                         }
                     }
 
+                    if (window.codeforgeBrowser) shareUrl = shareUrl.replace('?', '#');
                     shareUrlOutput.value = shareUrl;
                     shareUrlOutput.style.display = 'block';
                     shareUrlOutput.focus();
@@ -219,112 +224,51 @@ class CodeCompilerApp {
         }
     }
 
+    loadProject(project) {
+        if (!Array.isArray(project?.files) || !project.files.length) return false;
+        if (project.lang && [...this.dom.language.options].some(option => option.value === project.lang)) {
+            this.dom.language.value = project.lang;
+            this.codeEditor.updateCodeMirrorMode();
+        }
+        this.fileManager.loadFiles(project.files, project.activeFile);
+        this.examplesManager.updateExamplesDropdown();
+        this.ui.updateVerifyButtonVisibility(this.dom.language.value);
+        this.updateLibraryBrowserVisibility(this.dom.language.value);
+        this.codeExecution.resetCompilation();
+        return true;
+    }
+
     async initialize() {
         console.log('Starting application initialization...');
 
         // Initialize session management
-        this.sessionManager.startAutoRefresh(30000); // Refresh session info every 30 seconds
+        if (!window.codeforgeBrowser) this.sessionManager.startAutoRefresh(30000);
 
-        // Check for files/lang in URL params (for shareable links)
-        const params = new URLSearchParams(window.location.search);
-        let filesRestoredFromUrl = false;
-
-        // Try parsing with compression utility first
-        if (window.URLCompression) {
-            try {
-                const data = await URLCompression.parseFromURL(params);
-                if (data && data.files && Array.isArray(data.files)) {
-                    // Set language if provided
-                    if (data.lang && this.dom.language.value !== data.lang) {
-                        this.dom.language.value = data.lang;
-                        this.codeEditor.updateCodeMirrorMode();
-                    }
-
-                    if (this.fileManager) {
-                        // Remove all current files
-                        this.fileManager.files.clear();
-                        document.getElementById('file-tabs').innerHTML = '';
-
-                        // Add files from URL
-                        let firstId = null;
-                        data.files.forEach((f, idx) => {
-                            const id = this.fileManager.createFile(f.name, f.content, null, false);
-                            if (idx === 0) firstId = id;
-                        });
-
-                        // Set active file
-                        let activeId = null;
-                        if (data.activeFile) {
-                            for (let [id, file] of this.fileManager.files.entries()) {
-                                if (file.name === data.activeFile) {
-                                    activeId = id;
-                                    break;
-                                }
-                            }
-                        }
-                        this.fileManager.switchToFile(activeId || firstId);
-                        filesRestoredFromUrl = true;
-
-                        console.log(`Restored ${data.files.length} files from compressed URL`);
-                    }
-                }
-            } catch (error) {
-                console.warn('Failed to parse compressed URL data:', error);
-            }
+        const readProjectParams = () => new URLSearchParams(
+            window.codeforgeBrowser && /^#(?:c|files)=/.test(location.hash)
+                ? location.hash.slice(1)
+                : location.search,
+        );
+        const params = readProjectParams();
+        const resume = window.codeforgeBrowser?.takePendingAction();
+        const project = resume?.project
+            ?? await window.URLCompression?.parseFromURL(params)
+            ?? window.codeforgeBrowser?.restoreProject(params);
+        const restored = this.loadProject(project);
+        if (window.codeforgeBrowser) {
+            this.examplesManager.openProject = project => this.loadProject(project);
+            window.addEventListener('hashchange', async () => {
+                this.loadProject(await URLCompression.parseFromURL(readProjectParams()));
+            });
+            window.addEventListener('pagehide', () => {
+                const files = this.fileManager.getAllFiles().map(({name, content}) => ({name, content}));
+                const activeFile = this.fileManager.getActiveFile()?.name;
+                window.codeforgeBrowser.saveProject({lang: this.dom.language.value, files, activeFile});
+            });
         }
 
-        // Legacy fallback handling for old URL formats
-        if (!filesRestoredFromUrl) {
-            if (params.has('files')) {
-                try {
-                    const data = JSON.parse(decodeURIComponent(escape(atob(params.get('files')))));
-                    if (data.lang && this.dom.language.value !== data.lang) {
-                        this.dom.language.value = data.lang;
-                        this.codeEditor.updateCodeMirrorMode();
-                    }
-                    if (data.files && Array.isArray(data.files) && this.fileManager) {
-                        // Remove all current files
-                        this.fileManager.files.clear();
-                        document.getElementById('file-tabs').innerHTML = '';
-                        // Add files from URL
-                        let firstId = null;
-                        data.files.forEach((f, idx) => {
-                            const id = this.fileManager.createFile(f.name, f.content, null, false);
-                            if (idx === 0) firstId = id;
-                        });
-                        // Set active file
-                        let activeId = null;
-                        for (let [id, file] of this.fileManager.files.entries()) {
-                            if (file.name === data.activeFile) {
-                                activeId = id;
-                                break;
-                            }
-                        }
-                        this.fileManager.switchToFile(activeId || firstId);
-                        filesRestoredFromUrl = true;
-                    }
-                } catch (e) {
-                    console.warn('Failed to decode shared files from URL:', e);
-                }
-            } else if (params.has('code')) {
-                try {
-                    const code = decodeURIComponent(escape(atob(params.get('code'))));
-                    const lang = params.get('lang');
-                    if (lang && this.dom.language.value !== lang) {
-                        this.dom.language.value = lang;
-                        this.codeEditor.updateCodeMirrorMode();
-                    }
-                    this.codeEditor.setCodeContent(code);
-                    filesRestoredFromUrl = true;
-                } catch (e) {
-                    console.warn('Failed to decode shared code from URL:', e);
-                }
-            }
-        }
-
-        // Initialize examples and set default code only if no files restored from URL
         await this.examplesManager.loadAvailableExamples();
-        if (!filesRestoredFromUrl && (!this.fileManager.files || this.fileManager.files.size === 0)) {
+        if (!restored && (window.codeforgeBrowser || this.fileManager.files.size === 0)) {
             await this.examplesManager.setExampleCode(this.dom.language.value);
         }
 
@@ -334,6 +278,10 @@ class CodeCompilerApp {
         // Set initial library browser visibility
         this.updateLibraryBrowserVisibility(this.dom.language.value);
 
+        if (resume && crossOriginIsolated) {
+            this.dom.timeoutInput.value = resume.timeout;
+            document.getElementById(resume.operation + '-btn').click();
+        }
         console.log('Application initialization complete');
     }
 }

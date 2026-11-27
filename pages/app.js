@@ -1,53 +1,17 @@
-const byId = id => document.getElementById(id);
+(() => {
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
-const sample = 'class HELLO_WORLD\n\ncreate\n    make\n\nfeature\n    make\n        do\n            check True end\n        end\nend\n';
-const project = new Map(JSON.parse(localStorage.getItem('codeforge-eiffel-files') || 'null')
-    || [['hello_world.e', sample]]);
 const sent = new Map();
-let active = project.keys().next().value;
+const storageKey = 'codeforge-project';
+const filenamePattern = /^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$/;
+const languages = ['eiffel', 'python', 'c', 'cpp', 'java'];
 let vm;
+let send;
 let waiting;
 let terminalLine = '';
-let report = '';
-let send;
-const setStatus = message => { byId('status').textContent = message; };
-
-function selectFile(name) {
-    active = name;
-    byId('files').replaceChildren(...[...project.keys()].map(key => new Option(key, key)));
-    byId('files').value = name;
-    byId('editor').value = project.get(name);
-    byId('remove').disabled = project.size < 2;
-}
-
-function saveProject() {
-    localStorage.setItem('codeforge-eiffel-files', JSON.stringify([...project]));
-}
-
-byId('editor').oninput = () => {
-    project.set(active, byId('editor').value);
-    saveProject();
-};
-byId('files').onchange = event => selectFile(event.target.value);
-byId('add').onclick = () => {
-    const name = prompt('New Eiffel filename', 'new_class.e')?.trim();
-    if (!name) return;
-    if (!/^[a-zA-Z0-9_][a-zA-Z0-9_.-]*\.e$/.test(name) || project.has(name)) {
-        setStatus('Enter a unique filename ending in .e.');
-        return;
-    }
-    project.set(name, '');
-    selectFile(name);
-    saveProject();
-};
-byId('remove').onclick = () => {
-    if (project.size < 2) return;
-    project.delete(active);
-    selectFile(project.keys().next().value);
-    saveProject();
-};
-selectFile(active);
+let result;
+let job;
+let examples;
 
 function getScript(url) {
     return new Promise((resolve, reject) => {
@@ -63,7 +27,7 @@ function response(test, timeout) {
     return new Promise((resolve, reject) => {
         const timer = setTimeout(() => {
             waiting = null;
-            reject(new Error('The VM did not respond in time. Reload the page to restart it.'));
+            reject(new Error('The VM stopped responding. Reload the page to restart it.'));
         }, timeout);
         waiting = line => {
             if (!test(line)) return;
@@ -75,24 +39,50 @@ function response(test, timeout) {
 }
 
 function receive(data) {
-    const value = typeof data === 'string' ? data : decoder.decode(data, {stream: true});
-    terminalLine += value;
+    terminalLine += typeof data === 'string' ? data : decoder.decode(data, {stream: true});
     let newline;
     while ((newline = terminalLine.indexOf('\n')) >= 0) {
         const line = terminalLine.slice(0, newline).replace(/\r/g, '');
         terminalLine = terminalLine.slice(newline + 1);
-        if (line.startsWith('CF_RESULT ')) {
-            report = new TextDecoder().decode(Uint8Array.from(atob(line.slice(10)), c => c.charCodeAt(0)));
-        } else if (!line.startsWith('CF_') && line.trim()) {
-            byId('output').append(line + '\n');
+        if (line.startsWith('CF_DONE ')) {
+            const [, code, encoded] = line.split(' ');
+            const bytes = Uint8Array.from(atob(encoded), character => character.charCodeAt(0));
+            result = {code: Number(code), output: new TextDecoder().decode(bytes)};
         }
         waiting?.(line);
     }
 }
 
-async function startVM() {
-    setStatus('Downloading the Eiffel VM. The first download is about 400 MiB.');
-    await Promise.all([getScript('./runtime-v3/xterm.js'), getScript('./runtime-v3/pty.js')]);
+async function loadDisk() {
+    const [size, disk] = await Promise.all([
+        fetch('./runtime-v4/disk-size.txt'),
+        fetch('./runtime-v4/eiffel.ext4.gz'),
+    ]);
+    if (!size.ok || !disk.ok) throw new Error('The browser VM download is unavailable.');
+    const bytes = new Uint8Array(Number(await size.text()));
+    const reader = disk.body.pipeThrough(new DecompressionStream('gzip')).getReader();
+    let offset = 0;
+    try {
+        for (;;) {
+            const {value, done} = await reader.read();
+            if (done) break;
+            bytes.set(value, offset);
+            offset += value.length;
+        }
+    } finally {
+        reader.releaseLock();
+    }
+    if (offset !== bytes.length) throw new Error('The browser VM download is incomplete.');
+    return bytes;
+}
+
+async function startVM(updatePhase) {
+    updatePhase('Downloading the browser VM on first use…');
+    const [bytes] = await Promise.all([
+        loadDisk(),
+        getScript('./runtime-v4/xterm.js'),
+        getScript('./runtime-v4/pty.js'),
+    ]);
     const term = new Terminal();
     term.write = (data, done) => { receive(data); done?.(); };
     const {master, slave} = openpty();
@@ -102,17 +92,12 @@ async function startVM() {
     slave.onReadable(() => callbacks.splice(0).forEach(callback => callback()));
     const config = {
         pty: slave,
-        mainScriptUrlOrBlob: new URL('./runtime-v3/out.js', location.href).href,
-        locateFile: file => new URL('./runtime-v3/' + file, location.href).href,
+        mainScriptUrlOrBlob: new URL('./runtime-v4/out.js', location.href).href,
+        locateFile: file => new URL('./runtime-v4/' + file, location.href).href,
         preRun: [],
     };
     window.Module = config;
-    await getScript('./runtime-v3/load.js');
-    const disk = await fetch('./runtime-v3/eiffel.ext4.gz');
-    if (!disk.ok) throw new Error('The Eiffel VM download is unavailable.');
-    const bytes = new Uint8Array(await new Response(
-        disk.body.pipeThrough(new DecompressionStream('gzip')),
-    ).arrayBuffer());
+    await getScript('./runtime-v4/load.js');
     config.preRun.push(mod => {
         mod.FS.writeFile('/pack/eiffel.ext4', bytes, {canOwn: true});
         mod.TTY.stream_ops.poll = (stream, timeout, callback) => {
@@ -134,80 +119,220 @@ async function startVM() {
         '-kernel', '/pack/bzImage',
         '-append', 'console=ttyS0 root=/dev/vda rootwait ro init=/usr/local/sbin/codeforge-init loglevel=4',
     ];
-    const {default: initialize} = await import('./runtime-v3/out.js');
+    const {default: initialize} = await import('./runtime-v4/out.js');
     const ready = response(line => line.endsWith('CF_READY'), 120000);
-    setStatus('Starting the Eiffel VM…');
+    updatePhase('Starting the browser VM…');
     await Promise.all([ready, initialize(config)]);
 }
 
-async function command(input, timeout = 10000) {
-    const reply = response(line => /^CF_ACK \d+$/.test(line), timeout);
+async function command(input) {
+    const reply = response(line => /^CF_ACK \d+$/.test(line), 15000);
     send(input);
     if (await reply !== 'CF_ACK 0') throw new Error('The VM could not complete ' + input.split(' ')[0] + '.');
 }
 
-function displayReport(html) {
-    const doc = new DOMParser().parseFromString(html, 'text/html');
-    const rows = [...doc.querySelectorAll('tbody tr')];
-    if (!rows.length) {
-        setStatus('AutoProof returned no proof results.');
-        return;
+async function syncProject(language, files) {
+    await command('LANGUAGE ' + language);
+    if (!sent.has(language)) sent.set(language, new Map());
+    const previous = sent.get(language);
+    const snapshot = new Map(files.map(({name, content}) => [name, content]));
+    for (const name of previous.keys()) {
+        if (snapshot.has(name)) continue;
+        await command('REMOVE ' + name);
+        previous.delete(name);
     }
-    const failed = rows.filter(row => (row.getAttribute('style') || '').includes('#fdd')).length;
-    setStatus(`${rows.length} result${rows.length === 1 ? '' : 's'} · ${failed} failed`);
-    byId('output').textContent += '\n' + rows.map(row =>
-        [...row.cells].map(cell => cell.textContent.trim()).filter(Boolean).join(' — '),
-    ).join('\n');
+    for (const [name, source] of snapshot) {
+        if (previous.get(name) === source) continue;
+        await command('BEGIN');
+        const bytes = encoder.encode(source);
+        for (let offset = 0; offset < bytes.length; offset += 768) {
+            const chunk = bytes.subarray(offset, offset + 768);
+            await command('CHUNK ' + btoa(String.fromCharCode(...chunk)));
+        }
+        await command('SAVE ' + name);
+        previous.set(name, source);
+    }
 }
 
-byId('verify').onclick = async () => {
-    byId('verify').disabled = true;
-    report = '';
-    byId('output').textContent = '';
+function proofOutput(output) {
+    const report = new DOMParser().parseFromString(output, 'text/html');
+    const table = document.createElement('table');
+    let count = 0;
+    let failed = 0;
+    for (const row of report.querySelectorAll('tbody tr')) {
+        const copy = table.insertRow();
+        count++;
+        const color = row.style.backgroundColor;
+        copy.style.backgroundColor = color;
+        if (color !== 'rgb(221, 255, 221)') failed++;
+        for (const cell of row.cells) copy.insertCell().textContent = cell.textContent;
+    }
+    if (count) return {output: table.outerHTML, message: count + ' proof results · ' + failed + ' failed', failed};
+    const log = document.createElement('pre');
+    log.textContent = output;
+    return {output: log.outerHTML, message: 'AutoProof returned no proof results.', failed: 1};
+}
+
+async function enableIsolation(current, project, timeout, updatePhase) {
+    if (crossOriginIsolated) return;
+    if (!navigator.serviceWorker) throw new Error('This browser cannot isolate the VM.');
+    updatePhase('Preparing browser isolation…');
+    await navigator.serviceWorker.register('./coi.js');
+    await navigator.serviceWorker.ready;
+    if (current.cancelled) return;
+    if (sessionStorage.getItem('codeforge-isolation-retried')) {
+        throw new Error('The browser could not isolate the VM.');
+    }
+    sessionStorage.setItem('codeforge-isolation-retried', '1');
+    // The next navigation receives the isolation headers.
+    const data = {operation: current.operation_type, timeout, project};
+    sessionStorage.setItem('codeforge-resume', JSON.stringify(data));
+    location.reload();
+    await new Promise(() => {});
+}
+
+async function execute(current, project, timeout) {
+    const {language, files, main_file} = project;
+    const phase = message => { current.phase = message; };
     try {
-        await (vm ??= startVM());
-        setStatus('Updating changed source files…');
-        const snapshot = new Map(project);
-        for (const name of sent.keys()) {
-            if (!snapshot.has(name)) {
-                await command('REMOVE ' + name);
-                sent.delete(name);
-            }
-        }
-        for (const [name, source] of snapshot) {
-            if (sent.get(name) === source) continue;
-            await command('BEGIN');
-            const bytes = encoder.encode(source);
-            for (let offset = 0; offset < bytes.length; offset += 768) {
-                const chunk = bytes.subarray(offset, offset + 768);
-                await command('CHUNK ' + btoa(String.fromCharCode(...chunk)));
-            }
-            await command('SAVE ' + name);
-            sent.set(name, source);
-        }
-        byId('output').textContent = '';
-        setStatus('AutoProof is checking the project. You can keep editing.');
-        await command('VERIFY', 600000);
-        displayReport(report);
-    } catch (error) {
-        setStatus(error.message);
-    } finally {
-        byId('verify').disabled = false;
-    }
-};
+        await enableIsolation(current, {lang: language, files, activeFile: window.fileManager.getActiveFile()?.name},
+            timeout, phase);
+        if (current.cancelled) return;
+        await (vm ??= startVM(phase));
+        if (current.cancelled) return;
+        phase('Updating changed source files…');
+        await syncProject(language, files);
+        if (current.cancelled) return;
 
-if (!crossOriginIsolated) {
-    byId('verify').disabled = true;
-    if (!navigator.serviceWorker) {
-        setStatus('This browser cannot enable the isolation required by the VM.');
-    } else {
-        setStatus('Preparing browser isolation…');
-        navigator.serviceWorker.addEventListener('controllerchange', () => location.reload(), {once: true});
-        navigator.serviceWorker.register('./coi.js').then(() => {
-            if (navigator.serviceWorker.controller && !sessionStorage.getItem('codeforge-coi-reload')) {
-                sessionStorage.setItem('codeforge-coi-reload', '1');
-                location.reload();
+        result = null;
+        await command('START ' + [language, current.operation_type, timeout, main_file].join(' '));
+        current.began = performance.now();
+        current.phase = null;
+        let cancelSent = false;
+        while (!result) {
+            if (current.cancelled && !cancelSent) {
+                await command('CANCEL');
+                cancelSent = true;
             }
-        }).catch(error => setStatus(error.message));
+            await command('RESULT');
+            if (!result) await new Promise(resolve => setTimeout(resolve, 250));
+        }
+        const {code, output} = result;
+        current.exit_code = code;
+        current.success = code === 0;
+        if (current.cancelled) {
+            current.success = false;
+            current.message = 'Execution cancelled';
+        } else if (code === 124 || code === 137) {
+            current.message = 'Execution timed out';
+        } else if (current.operation_type === 'verify') {
+            const proof = proofOutput(output);
+            current.message = proof.message;
+            current.success = current.success && proof.failed === 0;
+            current.output = proof.output;
+        } else {
+            current.message = current.operation_type === 'compile'
+                ? (current.success ? 'Compilation succeeded' : 'Compilation failed')
+                : (current.success ? 'Execution completed' : 'Execution failed');
+        }
+        if (current.output === undefined) {
+            current.output = current.operation_type === 'verify' ? proofOutput(output).output : output;
+        }
+    } catch (error) {
+        current.message = error.message;
+        current.success = false;
+    } finally {
+        current.message ??= 'Execution cancelled';
+        current.phase = null;
+        current.running = false;
+        current.completed = true;
     }
 }
+
+function json(body, status = 200) {
+    return new Response(JSON.stringify(body), {status, headers: {'Content-Type': 'application/json'}});
+}
+
+function catalog() {
+    return examples ??= fetch('./examples.json').then(response => {
+        if (!response.ok) throw new Error('Could not load the examples.');
+        return response.json();
+    });
+}
+
+async function request(path, options) {
+    const [, resource, first, second] = path.split('/');
+    if (resource === 'examples') {
+        const items = await catalog();
+        if (!first) return json(items);
+        const example = items[first]?.[second];
+        if (!example) return json({detail: 'Example unavailable'}, 404);
+        const url = new URL(example, location.origin);
+        const params = url.searchParams;
+        const project = await URLCompression.parseFromURL(params);
+        return json({url: location.pathname + url.search.replace('?', '#'), code: project?.files[0]?.content, project});
+    }
+    if (resource === 'eiffel') {
+        const mappings = await fetch('./mappings.json').then(response => response.json());
+        if (first === 'mappings') return json({success: true, mappings, count: Object.keys(mappings).length});
+        const name = decodeURIComponent(second).toUpperCase();
+        const mapped = mappings[name] || name;
+        if (/^[A-Z][A-Z0-9_]*$/.test(mapped)) {
+            const source = await fetch('./runtime-v4/library/' + mapped + '.e');
+            if (source.ok) return json({success: true, mapped_class_name: mapped, source_code: await source.text()});
+        }
+        return json({success: false, message: 'Class ' + name + ' is unavailable.'});
+    }
+    if (resource === 'status') {
+        if (job?.id !== first) return json({running: false, message: 'Execution unavailable'});
+        return json({...job, elapsed_time: job.began ? (performance.now() - job.began) / 1000 : 0});
+    }
+    if (resource === 'cancel') {
+        if (!job?.running || job.id !== options.body.get('execution_id')) return json({success: false, message: 'Execution already finished'});
+        job.cancelled = true;
+        return json({success: true, pending: true, message: 'Cancelling…'});
+    }
+    const project = JSON.parse(options.body);
+    const {language, files, main_file} = project;
+    if (!languages.includes(language) || !files.length || !files.every(file => filenamePattern.test(file.name))
+        || !files.some(file => file.name === main_file)) {
+        return json({success: false, message: 'Use filenames starting with a letter, digit or underscore.'});
+    }
+    if (job?.running) return json({success: false, message: 'An operation is already running.'});
+    const timeout = Math.min(300, Math.max(5, parseInt(project.timeout, 10) || 300));
+    job = {id: crypto.randomUUID(), operation_type: resource, running: true, phase: 'Preparing the browser VM…'};
+    void execute(job, project, timeout);
+    return json({started: true, execution_id: job.id});
+}
+
+function restoreProject(params) {
+    if (params.has('files') || params.has('code')) return null;
+    try {
+        const stored = JSON.parse(localStorage.getItem(storageKey));
+        if (stored?.files?.length) return stored;
+        const previous = JSON.parse(localStorage.getItem('codeforge-eiffel-files'));
+        if (previous?.length) return {lang: 'eiffel', files: previous.map(([name, content]) => ({name, content}))};
+    } catch {
+        return null;
+    }
+    return null;
+}
+
+window.codeforgeBrowser = {
+    request,
+    restoreProject,
+    saveProject(project) {
+        try {
+            localStorage.setItem(storageKey, JSON.stringify(project));
+        } catch {
+            // A shared link can still preserve the project if storage is unavailable.
+        }
+    },
+    takePendingAction() {
+        const action = sessionStorage.getItem('codeforge-resume');
+        sessionStorage.removeItem('codeforge-resume');
+        if (crossOriginIsolated) sessionStorage.removeItem('codeforge-isolation-retried');
+        return JSON.parse(action);
+    },
+};
+})();

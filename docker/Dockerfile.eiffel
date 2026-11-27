@@ -116,10 +116,37 @@ COPY --from=build /reif/Src/Delivery/studio/spec/unix/prelink /opt/eiffel/studio
 COPY --from=build /reif/research/extension/autoproof/ /opt/eiffel/studio/tools/autoproof/
 COPY --from=browser-boogie-aot /out/BoogieDriver /opt/eiffel/studio/tools/boogie/boogie
 USER root
+RUN apt-get update && apt-get install -y --no-install-recommends openjdk-17-jdk-headless python3 \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /precomp
 # Build metadata in the same Eiffel layout used for every browser verification.
 RUN apb -config /library/base/base.ecf -target base -precompile -batch \
     && test -s /precomp/EIFGENs/base/precomp.eif
+WORKDIR /workspace
+USER coderunner
+
+FROM build AS pages-compiler-files
+WORKDIR /reif/Src/tools/quick_finalize
+RUN ec -config quick_finalize.ecf -finalize -c_compile -batch \
+    && install -Ds EIFGENs/quick_finalize/F_code/quick_finalize /compiler/bin/quick_finalize \
+    && install -Dm755 /reif/Src/Delivery/studio/spec/unix/finish_freezing /compiler/bin/finish_freezing \
+    && install -Ds /reif/Src/C/run-time/x2c /compiler/bin/x2c \
+    && mkdir -p /compiler/include /compiler/lib \
+    && cp -L /reif/Src/C/run-time/*.h /reif/Src/C/run-time/eif_stack.* \
+        /reif/Src/C/config.sh /compiler/include/ \
+    && cp /reif/Src/C/run-time/lib*.a /reif/Src/C/run-time/lib*.so /compiler/lib/
+
+FROM browser-pages AS browser-pages-full
+COPY --from=build /reif/Src/Delivery/studio/config/unix /opt/eiffel/studio/config/linux-x86-64
+COPY --from=pages-compiler-files /compiler/ /opt/eiffel/studio/spec/linux-x86-64/
+USER root
+WORKDIR /precomp
+RUN rm -rf EIFGENs \
+    && apb -config /library/base/base.ecf -target base -precompile -c_compile -batch \
+    && test -s EIFGENs/base/W_code/preobj.o
+RUN strip --strip-debug EIFGENs/base/W_code/driver EIFGENs/base/W_code/preobj.o \
+    && rm -rf EIFGENs/base/W_code/C[0-9]* EIFGENs/base/W_code/E[0-9]* /opt/eiffel/library \
+    && ln -s /library /opt/eiffel/library
 WORKDIR /workspace
 USER coderunner
 

@@ -155,7 +155,7 @@ class EiffelLibraryBrowser {
             this.showStatus('Fetching library class...', 'loading');
             this.libraryOutput.textContent = '';
 
-            const response = await fetch(`/eiffel/library/${encodeURIComponent(className)}`, {
+            const response = await codeforgeFetch(`/eiffel/library/${encodeURIComponent(className)}`, {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -362,7 +362,7 @@ class EiffelLibraryBrowser {
      */
     async loadAvailableMappings() {
         try {
-            const response = await fetch('/eiffel/mappings', {
+            const response = await codeforgeFetch('/eiffel/mappings', {
                 method: 'GET',
                 headers: {
                     'Accept': 'application/json',
@@ -392,7 +392,7 @@ class EiffelLibraryBrowser {
         try {
             this.showStatus('Reloading mappings...', 'loading');
 
-            const response = await fetch('/eiffel/mappings/reload', {
+            const response = await codeforgeFetch('/eiffel/mappings/reload', {
                 method: 'POST',
                 headers: {
                     'Accept': 'application/json',

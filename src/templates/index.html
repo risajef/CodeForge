@@ -25,7 +25,7 @@
     <header class="site-header">
         <div class="header-content">
             <div class="logo-section">
-                <h1><img src="favicon.ico">CodeForge</h1>
+                <h1><img src="{{ url_for('static', path='/favicon.svg') }}" alt="">CodeForge</h1>
                 <p class="subtitle">Multi-language code execution and verification platform for academic research</p>
             </div>
             <div class="keyboard-hint">
@@ -88,7 +88,7 @@
                     <div class="timeout-setting">
                         <label for="timeout">Timeout:</label>
                         <div class="input-with-unit">
-                            <input type="number" id="timeout" value="30" min="5" max="300">
+                            <input type="number" id="timeout" value="{{ 300 if browser else 30 }}" min="5" max="300">
                             <span class="unit">seconds</span>
                         </div>
                     </div>
@@ -158,8 +158,12 @@
             </div>
             <div class="footer-right">
                 <a href="https://se.constructor.ch/" target="_blank">SE Research Group</a>
+                {% if browser %}
+                <a href="./sources.html">Runtime sources</a>
+                {% else %}
                 <a href="/api/docs" target="_blank">API Documentation</a>
                 <a href="/api/redoc" target="_blank">ReDoc</a>
+                {% endif %}
             </div>
         </div>
     </footer>
@@ -221,13 +225,15 @@
         </div>
     </div>
 
+    {% if browser %}
+    <script src="./app.js"></script>
+    {% endif %}
     <!-- CodeMirror JavaScript -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
     <!-- Language modes -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/clike/clike.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/java/java.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/eiffel/eiffel.min.js"></script>
     <!-- Addons -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js"></script>

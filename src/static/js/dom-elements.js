@@ -87,3 +87,7 @@ class DOMElements {
 
 // Export as global for backwards compatibility
 window.DOMElements = DOMElements;
+
+function codeforgeFetch(url, options) {
+    return window.codeforgeBrowser ? window.codeforgeBrowser.request(url, options) : fetch(url, options);
+}

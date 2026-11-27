@@ -18,13 +18,11 @@ class FileManager {
         // Set up event listeners first
         this.setupEventListeners();
 
-        // Delay file creation to ensure language dropdown is properly initialized
-        setTimeout(() => {
-            this.initializeFirstFile();
-        }, 100);
-
-        // Listen for language changes to suggest filename updates
-        this.dom.language.addEventListener('change', () => this.onLanguageChange());
+        if (!window.codeforgeBrowser) {
+            // The browser edition initializes after its example catalog is ready.
+            setTimeout(() => this.initializeFirstFile(), 100);
+            this.dom.language.addEventListener('change', () => this.onLanguageChange());
+        }
     }
 
     initializeFirstFile() {
@@ -96,6 +94,15 @@ class FileManager {
         });
     }
 
+    loadFiles(files, activeName) {
+        this.files.clear();
+        this.activeFileId = null;
+        this.dom.fileTabsContainer.replaceChildren();
+        for (const {name, content} of files) this.createFile(name, content);
+        const active = [...this.files.values()].find(file => file.name === activeName);
+        if (active) this.switchToFile(active.id);
+    }
+
     createFile(filename, content = '', fileId = null, setActive = false) {
         if (!fileId) {
             fileId = `file_${this.fileCounter++}`;
@@ -132,10 +139,11 @@ class FileManager {
         tabElement.dataset.fileId = file.id;
 
         tabElement.innerHTML = `
-            <span class="tab-name" title="Double-click to rename">${file.name}</span>
+            <span class="tab-name" title="Double-click to rename"></span>
             <button class="tab-close" title="Close file">&times;</button>
         `;
 
+        tabElement.querySelector('.tab-name').textContent = file.name;
         fileTabsContainer.appendChild(tabElement);
     }
 

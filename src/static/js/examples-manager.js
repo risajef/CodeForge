@@ -22,7 +22,7 @@ class ExamplesManager {
     // Load available examples from server
     async loadAvailableExamples() {
         try {
-            const response = await fetch('/examples');
+            const response = await codeforgeFetch('/examples');
 
             if (!response.ok) {
                 throw new Error(`HTTP error! status: ${response.status}`);
@@ -96,12 +96,18 @@ class ExamplesManager {
         try {
             this.ui.updateStatus('Loading example...', true);
 
-            const response = await fetch(`/examples/${currentLanguage}/${selectedExample}`);
+            const response = await codeforgeFetch(`/examples/${currentLanguage}/${selectedExample}`);
             const result = await response.json();
 
             if (response.ok) {
-                // Navigate to the example URL
-                if (result.url) {
+                if (this.openProject && result.project) {
+                    const selected = this.dom.examples.value;
+                    this.openProject(result.project);
+                    this.dom.examples.value = selected;
+                    this.updateLoadExampleButton();
+                    history.replaceState(null, '', result.url);
+                    this.ui.clearOutput();
+                } else if (result.url) {
                     window.location.href = result.url;
                 } else {
                     this.ui.updateStatus('Error: No URL found for example', false);
@@ -124,7 +130,7 @@ class ExamplesManager {
 
             if (defaultFile && this.availableExamples[language] && this.availableExamples[language][defaultFile]) {
                 // Load the default example file
-                const response = await fetch(`/examples/${language}/${defaultFile}`);
+                const response = await codeforgeFetch(`/examples/${language}/${defaultFile}`);
                 const result = await response.json();
 
                 if (response.ok) {

@@ -34,7 +34,7 @@ class QuickGuideManager {
         if (!this.overlay) return;
 
         this.setupEventListeners();
-        this.checkShouldShow();
+        if (!window.codeforgeBrowser) this.checkShouldShow();
     }
 
     setupEventListeners() {

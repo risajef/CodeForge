@@ -67,10 +67,14 @@ class CodeExecutionManager {
         const requestData = this.prepareRequestData();
         if (!requestData) return false;
 
+        if (window.codeforgeBrowser) {
+            requestData.timeout = parseInt(this.dom.timeoutInput.value) || 300;
+            this.ui.setExecutionState(true);
+        }
         this.ui.updateStatus('Compiling...', true);
 
         try {
-            const response = await fetch('/compile', {
+            const response = await codeforgeFetch('/compile', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -80,6 +84,12 @@ class CodeExecutionManager {
 
             const result = await response.json();
 
+            if (result.started) {
+                this.currentExecutionId = result.execution_id;
+                this.startStatusCheck(result.execution_id, requestData.timeout);
+                return false;
+            }
+            if (window.codeforgeBrowser) this.ui.setExecutionState(false);
             this.ui.updateStatus(result.message, result.success);
             this.ui.updateOutput(result.output);
 
@@ -90,6 +100,7 @@ class CodeExecutionManager {
 
             return result.success;
         } catch (error) {
+            if (window.codeforgeBrowser) this.ui.setExecutionState(false);
             console.error('Compilation error:', error);
             this.ui.updateStatus('Error during compilation: ' + error.message, false);
             return false;
@@ -115,7 +126,7 @@ class CodeExecutionManager {
         this.ui.updateStatus('Starting execution...', true);
 
         try {
-            const response = await fetch('/run', {
+            const response = await codeforgeFetch('/run', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -156,7 +167,7 @@ class CodeExecutionManager {
         this.ui.updateStatus('Starting verification...', true);
 
         try {
-            const response = await fetch('/verify', {
+            const response = await codeforgeFetch('/verify', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json'
@@ -189,7 +200,7 @@ class CodeExecutionManager {
     startStatusCheck(executionId, timeout) {
         this.statusCheckInterval = setInterval(async () => {
             try {
-                const response = await fetch(`/status/${executionId}`);
+                const response = await codeforgeFetch(`/status/${executionId}`);
                 const status = await response.json();
 
                 if (!status.running) {
@@ -220,9 +231,13 @@ class CodeExecutionManager {
 
                 const elapsed = status.elapsed_time;
                 const remaining = Math.max(0, timeout - elapsed);
-                this.ui.updateStatus(`Running in container... (${elapsed.toFixed(1)}s elapsed, ${remaining.toFixed(1)}s remaining)`, true);
+                const action = status.operation_type === 'verify' ? 'Verifying with AutoProof' : 'Running in browser';
+                const progress = window.codeforgeBrowser
+                    ? (status.phase || `${action}… (${Math.floor(elapsed)}s)`)
+                    : `Running in container... (${elapsed.toFixed(1)}s elapsed, ${remaining.toFixed(1)}s remaining)`;
+                this.ui.updateStatus(status.cancelled ? 'Cancelling…' : progress, true);
 
-                if (elapsed >= timeout * 1.1) {
+                if (!window.codeforgeBrowser && elapsed >= timeout * 1.1) {
                     this.ui.setExecutionState(false);
                     this.currentExecutionId = null;
                     this.ui.updateStatus('Execution timed out', false);
@@ -256,7 +271,7 @@ class CodeExecutionManager {
             const formData = new FormData();
             formData.append('execution_id', this.currentExecutionId);
 
-            const response = await fetch('/cancel', {
+            const response = await codeforgeFetch('/cancel', {
                 method: 'POST',
                 body: formData
             });
@@ -264,7 +279,7 @@ class CodeExecutionManager {
             const result = await response.json();
             this.ui.updateStatus(result.message, result.success);
 
-            if (result.success) {
+            if (result.success && !result.pending) {
                 this.ui.setExecutionState(false);
                 this.currentExecutionId = null;
                 if (this.statusCheckInterval) {
