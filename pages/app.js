@@ -54,12 +54,15 @@ function receive(data) {
     }
 }
 
-async function loadDisk() {
+async function loadDisk(updatePhase) {
+    const start = performance.now();
     const [size, disk] = await Promise.all([
         fetch(runtime + 'disk-size.txt'),
         fetch(runtime + 'eiffel.ext4.gz'),
     ]);
     if (!size.ok || !disk.ok) throw new Error('The browser VM download is unavailable.');
+    const source = disk.headers.get('X-CodeForge-Runtime-Cache') || 'unknown';
+    if (source === 'hit') updatePhase('Loading the browser VM from this device…');
     const bytes = new Uint8Array(Number(await size.text()));
     const reader = disk.body.pipeThrough(new DecompressionStream('gzip')).getReader();
     let offset = 0;
@@ -74,16 +77,18 @@ async function loadDisk() {
         reader.releaseLock();
     }
     if (offset !== bytes.length) throw new Error('The browser VM download is incomplete.');
+    performance.measure('codeforge:disk', {start, end: performance.now(), detail: {source}});
     return bytes;
 }
 
 async function startVM(updatePhase) {
     updatePhase('Downloading the browser VM on first use…');
     const [bytes] = await Promise.all([
-        loadDisk(),
+        loadDisk(updatePhase),
         getScript(runtime + 'xterm.js'),
         getScript(runtime + 'pty.js'),
     ]);
+    const start = performance.now();
     const term = new Terminal();
     term.write = (data, done) => { receive(data); done?.(); };
     const {master, slave} = openpty();
@@ -124,6 +129,7 @@ async function startVM(updatePhase) {
     const ready = response(line => line.endsWith('CF_READY'), 120000);
     updatePhase('Starting the browser VM…');
     await Promise.all([ready, initialize(config)]);
+    performance.measure('codeforge:boot', {start, end: performance.now()});
 }
 
 async function command(input, timeout = 15000) {
@@ -178,7 +184,7 @@ async function enableIsolation(current, project, timeout, updatePhase) {
     if (crossOriginIsolated) return;
     if (!navigator.serviceWorker) throw new Error('This browser cannot isolate the VM.');
     updatePhase('Preparing browser isolation…');
-    await navigator.serviceWorker.register('./coi.js');
+    await navigator.serviceWorker.register('./coi.js', {updateViaCache: 'none'});
     await navigator.serviceWorker.ready;
     if (current.cancelled) return;
     if (sessionStorage.getItem('codeforge-isolation-retried')) {
@@ -202,10 +208,13 @@ async function execute(current, project, timeout) {
         await (vm ??= startVM(phase));
         if (current.cancelled) return;
         phase('Updating changed source files…');
+        const syncStarted = performance.now();
         await syncProject(language, files);
+        performance.measure('codeforge:source-sync', {start: syncStarted, end: performance.now()});
         if (current.cancelled) return;
 
         result = null;
+        const workStarted = performance.now();
         await command('START ' + [language, current.operation_type, timeout, main_file].join(' '));
         current.began = performance.now();
         current.phase = null;
@@ -218,6 +227,7 @@ async function execute(current, project, timeout) {
             await command('RESULT', 90000);
             if (!result) await new Promise(resolve => setTimeout(resolve, 250));
         }
+        performance.measure('codeforge:' + current.operation_type, {start: workStarted, end: performance.now()});
         const {code, output} = result;
         current.exit_code = code;
         current.success = code === 0;
