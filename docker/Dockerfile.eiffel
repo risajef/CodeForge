@@ -1,19 +1,128 @@
-# Simplified Alpine-based Eiffel execution environment
-# Note: This is a minimal setup for basic Eiffel code compilation and autoproof verification.
-FROM risajef/autoproof:latest
+# The pinned reif revision uses EiffelStudio 24.05 and the batch AutoProof target.
+FROM mcr.microsoft.com/dotnet/sdk:6.0.428-1-jammy-amd64 AS build
+ARG REIF_REVISION=cf0bb4d370bf59df9a005ac6ee15e4a1d5004e32
+ENV ISE_EIFFEL=/Eiffel_24.05 \
+    ISE_PLATFORM=linux-x86-64 \
+    EIFFEL_SRC=/reif/Src \
+    ISE_LIBRARY=/reif/Src \
+    EXT=/reif/research/extension \
+    AP=/reif/research/extension/autoproof \
+    GOBO=/reif/Src/contrib/library/gobo
+ENV PATH="${ISE_EIFFEL}/studio/spec/${ISE_PLATFORM}/bin:${PATH}"
 
-# Create a non-root user for security
-RUN useradd -m -u 1000 coderunner
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential bzip2 ca-certificates git libgtk-3-dev python3 unzip wget \
+    && rm -rf /var/lib/apt/lists/*
+RUN wget -nv -O /tmp/eiffel.tar.bz2 https://www.eiffel.com/cdn/EiffelStudio/24.05/107822/Eiffel_24.05_rev_107822-linux-x86-64.tar.bz2 \
+    && tar -xjf /tmp/eiffel.tar.bz2 -C / && rm /tmp/eiffel.tar.bz2
 
-# Create workspace directory
-RUN mkdir -p /workspace && \
-    chown coderunner:coderunner /workspace
+RUN git clone --depth 1 --branch v2.11.1 https://github.com/boogie-org/boogie.git /boogie \
+    && dotnet publish /boogie/Source/BoogieDriver/BoogieDriver.csproj -c Release -o "${ISE_EIFFEL}/studio/tools/boogie" \
+    && mv "${ISE_EIFFEL}/studio/tools/boogie/BoogieDriver" "${ISE_EIFFEL}/studio/tools/boogie/boogie"
+RUN wget -nv -O /tmp/z3.zip https://github.com/Z3Prover/z3/releases/download/z3-4.8.8/z3-4.8.8-x64-ubuntu-16.04.zip \
+    && unzip -j /tmp/z3.zip '*/bin/z3' -d /usr/local/bin && rm /tmp/z3.zip
 
-# Set working directory
+RUN git init /reif \
+    && git -C /reif fetch --depth 1 https://github.com/CI-CSE/reif.git "${REIF_REVISION}" \
+    && git -C /reif checkout --detach FETCH_HEAD
+WORKDIR /reif/research
+RUN mkdir -p "${ISE_EIFFEL}/studio/tools/autoproof" \
+    && cp -a "${AP}/." "${ISE_EIFFEL}/studio/tools/autoproof/" \
+    && bash compile_c.sh \
+    && ec -config "${AP}/autoproof.ecf" -target batch -finalize -c_compile -batch \
+    && test -x EIFGENs/batch/F_code/ecb
+
+FROM build AS runtime-files
+# CodeForge's ECF loads this precompile relative to /workspace.
+RUN mkdir -p /library /precomp \
+    && cp -a "${EIFFEL_SRC}/library/." "${AP}/library/." /library/
+WORKDIR /precomp
+RUN env -u ISE_LIBRARY -u EIFFEL_SRC \
+    /reif/research/EIFGENs/batch/F_code/ecb \
+    -config /library/base/base.ecf -target base -precompile -c_compile -batch \
+    && test -s EIFGENs/base/precomp.eif
+
+FROM runtime-files AS browser-files
+RUN bash -ec 'mkdir -p /browser/studio \
+    && cp -a "${ISE_EIFFEL}"/{LICENSE,VERSION,C_library,contrib,library,precomp,unstable} /browser/ \
+    && cp -a "${ISE_EIFFEL}"/studio/{built_ins,config,eifinit,filters,help,lang,spec,templates,tools} /browser/studio/ \
+    && rm -rf /browser/contrib/examples /browser/library/gobo/spec \
+        /browser/studio/spec/"${ISE_PLATFORM}"/bin/{ec,ecb,ecdbgd,estudio} \
+        /browser/studio/tools/boogie'
+RUN install -Ds /reif/research/EIFGENs/batch/F_code/ecb /browser-bin/apb \
+    && install -Ds /usr/local/bin/z3 /browser-bin/z3
+# Keep the linked precompile and its metadata. The C generation directories
+# were used to produce preobj.o and are not needed to link user programs.
+RUN cp -a /precomp /browser-precomp \
+    && rm -rf /browser-precomp/EIFGENs/base/W_code/C[0-9]* \
+        /browser-precomp/EIFGENs/base/W_code/E[0-9]*
+
+FROM build AS browser-boogie
+# The .NET host cannot discover the system runtime in the browser's OCI mount.
+RUN dotnet publish /boogie/Source/BoogieDriver/BoogieDriver.csproj -c Release \
+    -r linux-x64 --self-contained true -p:PublishReadyToRun=true \
+    -p:DebugType=None -p:DebugSymbols=false -o /browser-boogie \
+    && mv /browser-boogie/BoogieDriver /browser-boogie/boogie
+
+FROM mcr.microsoft.com/dotnet/sdk:8.0-jammy AS browser-boogie-aot
+RUN apt-get update && apt-get install -y --no-install-recommends clang git zlib1g-dev \
+    && rm -rf /var/lib/apt/lists/*
+WORKDIR /boogie
+COPY --from=build /boogie/ /boogie/
+COPY boogie-native.patch /tmp/boogie-native.patch
+# Load the bundled SMTLib prover statically under Native AOT.
+RUN git apply --ignore-space-change /tmp/boogie-native.patch \
+    && dotnet publish Source/BoogieDriver/BoogieDriver.csproj -c Release -r linux-x64 \
+        -p:PublishAot=true -p:InvariantGlobalization=true -o /out
+
+FROM mcr.microsoft.com/dotnet/runtime-deps:6.0-jammy AS runtime-base
+ENV ISE_EIFFEL=/Eiffel_24.05 ISE_PLATFORM=linux-x86-64
+ENV PATH="${ISE_EIFFEL}/studio/spec/${ISE_PLATFORM}/bin:${PATH}"
+
+RUN apt-get update && apt-get install -y --no-install-recommends build-essential libgtk-3-0 \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd -m -u 1000 coderunner \
+    && install -d -o coderunner -g coderunner /workspace
+
+COPY --from=runtime-files /library /library
+
 WORKDIR /workspace
-
-# Switch to non-root user
 USER coderunner
-
-# Set default command
 CMD ["/bin/sh"]
+
+# Smaller distribution for CodeForge's apb and C compilation workflow.
+FROM runtime-base AS browser-base
+COPY --from=browser-files /browser /Eiffel_24.05
+COPY --from=browser-files /browser-bin/ /usr/local/bin/
+COPY --from=browser-files /browser-precomp /precomp
+
+FROM browser-base AS browser
+COPY --from=browser-boogie /browser-boogie/ /Eiffel_24.05/studio/tools/boogie/
+
+FROM browser-base AS browser-aot
+COPY --from=browser-boogie-aot /out/BoogieDriver /Eiffel_24.05/studio/tools/boogie/boogie
+
+# Source-built verifier for public browser distribution.
+FROM runtime-base AS browser-pages
+ENV ISE_EIFFEL=/opt/eiffel ISE_LIBRARY=/
+COPY --from=browser-files /browser-bin/ /usr/local/bin/
+COPY --from=browser-files /browser-precomp /precomp
+COPY --from=build /reif/gpl.txt /opt/eiffel/LICENSE
+COPY --from=build /reif/Src/Delivery/studio/eifinit /opt/eiffel/studio/eifinit
+COPY --from=build /reif/Src/Delivery/studio/config /opt/eiffel/studio/config
+COPY --from=build /reif/Src/Delivery/studio/spec/unix/prelink /opt/eiffel/studio/spec/linux-x86-64/bin/prelink
+COPY --from=build /reif/research/extension/autoproof/ /opt/eiffel/studio/tools/autoproof/
+COPY --from=browser-boogie-aot /out/BoogieDriver /opt/eiffel/studio/tools/boogie/boogie
+
+# Keep the complete EiffelStudio distribution in the default image.
+FROM runtime-base AS runtime
+USER root
+RUN apt-get update && apt-get install -y --no-install-recommends libgtk-3-dev \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet
+COPY --from=mcr.microsoft.com/dotnet/runtime:6.0-jammy /usr/share/dotnet /usr/share/dotnet
+COPY --from=build /reif/research/EIFGENs/batch/F_code/ecb /usr/local/bin/apb
+COPY --from=build /usr/local/bin/z3 /usr/local/bin/z3
+COPY --from=build /Eiffel_24.05 /Eiffel_24.05
+COPY --from=runtime-files /precomp /precomp
+USER coderunner

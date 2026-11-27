@@ -1,0 +1,36 @@
+name: Deploy CodeForge Pages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - name: Assemble the static site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p dist/runtime
+          cp pages/{index.html,style.css,app.js,coi.js,sources.html} dist/
+          gh release download pages-runtime-v1 --pattern '*.tar' --dir "${RUNNER_TEMP}"
+          tar -xf "${RUNNER_TEMP}/codeforge-pages-runtime.tar" -C dist/runtime
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - uses: actions/deploy-pages@v4
+        id: deployment

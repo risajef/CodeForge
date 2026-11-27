@@ -177,3 +177,36 @@ services:
 ## License
 
 This Docker configuration is part of the CodeForge project and follows the same MIT license.
+## Build the Eiffel / AutoProof runner
+
+Run these commands from the repository root.
+
+```sh
+docker build -f docker/Dockerfile.eiffel -t code-executor-eiffel:latest docker
+docker build -f docker/Dockerfile.eiffel --target browser -t code-executor-eiffel:browser docker
+docker build -f docker/Dockerfile.eiffel --target browser-aot -t code-executor-eiffel:browser-aot docker
+```
+
+Both targets fetch the pinned `CI-CSE/reif` revision during the build, compile
+the batch AutoProof executable for Linux x86-64, and generate the base-library
+precompile that CodeForge loads from `/precomp`. To use a different commit, pass
+`--build-arg REIF_REVISION=<commit>`. The default target retains the EiffelStudio
+distribution. The `browser` target retains `apb`, the compiler helpers and libraries
+for CodeForge, and omits the IDE executables and sample projects. It packages
+Boogie with ReadyToRun code and an app-local .NET runtime for container2wasm's
+OCI mount.
+
+The experimental `browser-aot` target compiles Boogie to a native executable
+and bundles its SMTLib prover statically. It uses Z3 from the image.
+
+## CodeForge on GitHub Pages
+
+The static site in `pages/` runs Eiffel AutoProof in a QEMU WebAssembly guest.
+It keeps the workspace and generated `EIFGENs` in the same guest across
+verifications and only transfers files that changed. The VM resets on page reload.
+
+`pages/prepare-runtime.sh QEMU_ASSET_DIRECTORY OUTPUT_DIRECTORY` packages the
+source-built `browser-pages` runner with QEMU assets from container2wasm
+v0.8.5 (`c2w --external-bundle --to-js`). It requires an x86-64 image builder
+and `mke2fs` with tar input support. The GitHub Pages action serves the runtime
+archive from the `pages-runtime-v1` release alongside the static UI.

@@ -1,0 +1,76 @@
+--- a/Source/Directory.Build.props
++++ b/Source/Directory.Build.props
+@@ -3,7 +3,7 @@
+   <!-- Target framework and package configuration -->
+   <PropertyGroup>
+     <Version>2.11.1</Version>
+-    <TargetFramework>net6.0</TargetFramework>
++    <TargetFramework>net8.0</TargetFramework>
+     <GeneratePackageOnBuild>false</GeneratePackageOnBuild>
+     <Authors>Boogie</Authors>
+     <RepositoryUrl>https://github.com/boogie-org/boogie</RepositoryUrl>
+--- a/Source/Core/ProverUtil.cs
++++ b/Source/Core/ProverUtil.cs
+@@ -114,7 +114,7 @@
+     static string CodebaseString()
+     {
+       Contract.Ensures(Contract.Result<string>() != null);
+-      return Path.GetDirectoryName(cce.NonNull(System.Reflection.Assembly.GetExecutingAssembly().Location));
++      return AppContext.BaseDirectory;
+     }
+
+     public string ExecutablePath()
+@@ -322,11 +322,18 @@
+     {
+     }
+
++    public static Func<ProverFactory> BuiltinSmtLib;
++
+     public static ProverFactory Load(string proverName)
+     {
+       Contract.Requires(proverName != null);
+       Contract.Ensures(Contract.Result<ProverFactory>() != null);
+       Contract.Ensures(cce.IsNew(Contract.Result<ProverFactory>()) && cce.Owner.New(Contract.Result<ProverFactory>()));
++      if (proverName == "SMTLib" && BuiltinSmtLib != null)
++      {
++        return BuiltinSmtLib();
++      }
++
+       string /*!*/
+         path;
+       if (proverName.IndexOf("/") > 0 || proverName.IndexOf("\\") > 0)
+--- a/Source/Core/CommandLineOptions.cs
++++ b/Source/Core/CommandLineOptions.cs
+@@ -70,9 +70,7 @@
+       get
+       {
+         Contract.Ensures(Contract.Result<string>() != null);
+-        return cce.NonNull(cce
+-          .NonNull(System.Diagnostics.FileVersionInfo.GetVersionInfo(System.Reflection.Assembly.GetExecutingAssembly()
+-            .Location)).FileVersion);
++        return System.Reflection.Assembly.GetExecutingAssembly().GetName().Version.ToString();
+       }
+     }
+
+--- a/Source/BoogieDriver/BoogieDriver.cs
++++ b/Source/BoogieDriver/BoogieDriver.cs
+@@ -12,6 +12,7 @@
+       Contract.Requires(cce.NonNullElements(args));
+
+       ExecutionEngine.printer = new ConsolePrinter();
++      ProverFactory.BuiltinSmtLib = () => new Microsoft.Boogie.SMTLib.Factory();
+
+       CommandLineOptions.Install(new CommandLineOptions());
+       CommandLineOptions.Clo.RunningBoogieFromCommandLine = true;
+--- a/Source/BoogieDriver/BoogieDriver.csproj
++++ b/Source/BoogieDriver/BoogieDriver.csproj
+@@ -26,4 +26,9 @@
+     <ProjectReference Include="..\VCGeneration\VCGeneration.csproj" />
+   </ItemGroup>
+
++  <ItemGroup>
++    <TrimmerRootAssembly Include="System.Configuration.ConfigurationManager" />
++    <TrimmerRootAssembly Include="System.Runtime.Caching" />
++  </ItemGroup>
++
+ </Project>
