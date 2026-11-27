@@ -1,6 +1,6 @@
 # Docker
 
-Start the server and its five language runners from the repo root:
+Run this from the repo root to start the server and its five language runners.
 
 ~~~sh
 docker compose -f docker-compose.standalone.yml up --build

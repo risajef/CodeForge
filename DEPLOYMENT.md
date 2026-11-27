@@ -2,7 +2,7 @@
 
 ## GitHub Pages
 
-Enable **Settings → Pages → GitHub Actions**, then run:
+Enable **Settings → Pages → GitHub Actions** and run the workflow.
 
 ~~~sh
 gh workflow run pages.yml
@@ -12,7 +12,7 @@ The workflow renders the shared editor, includes the example catalog, and downlo
 
 ## Update the browser runtime
 
-Use x86-64 Linux with Docker or Podman, mke2fs, and the [container2wasm QEMU assets](docker/README.md).
+Use x86-64 Linux with Docker, mke2fs, and the [container2wasm QEMU assets](docker/README.md). For Podman, set `CONTAINER_ENGINE=podman`.
 
 ~~~sh
 pages/prepare-runtime.sh /path/to/qemu-assets /tmp/runtime-v5

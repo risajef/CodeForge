@@ -6,7 +6,7 @@
 2. Choose an example and click **Load Example**.
 3. Click **Run** or **Verify**. Use **Share Code URL** to send the whole project.
 
-The first run downloads a Linux VM. AutoProof can take several minutes in the browser.
+The first run downloads about 535 MiB. Eiffel compilation and AutoProof can take several minutes in the browser.
 
 ## Run locally
 
