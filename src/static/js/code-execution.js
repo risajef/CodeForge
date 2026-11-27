@@ -68,7 +68,7 @@ class CodeExecutionManager {
         if (!requestData) return false;
 
         if (window.codeforgeBrowser) {
-            requestData.timeout = parseInt(this.dom.timeoutInput.value) || 300;
+            requestData.timeout = parseInt(this.dom.timeoutInput.value) || Number(this.dom.timeoutInput.defaultValue);
             this.ui.setExecutionState(true);
         }
         this.ui.updateStatus('Compiling...', true);
@@ -112,7 +112,7 @@ class CodeExecutionManager {
         const requestData = this.prepareRequestData();
         if (!requestData) return;
 
-        const timeout = parseInt(this.dom.timeoutInput.value) || 30;
+        const timeout = parseInt(this.dom.timeoutInput.value) || Number(this.dom.timeoutInput.defaultValue);
         requestData.timeout = timeout;
 
         if (useCompiled && this.compiledFilePath) {
@@ -160,7 +160,7 @@ class CodeExecutionManager {
         const requestData = this.prepareRequestData();
         if (!requestData) return;
 
-        const timeout = parseInt(this.dom.timeoutInput.value) || 30;
+        const timeout = parseInt(this.dom.timeoutInput.value) || Number(this.dom.timeoutInput.defaultValue);
         requestData.timeout = timeout;
 
         this.ui.setExecutionState(true);

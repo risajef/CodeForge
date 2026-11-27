@@ -88,7 +88,7 @@
                     <div class="timeout-setting">
                         <label for="timeout">Timeout:</label>
                         <div class="input-with-unit">
-                            <input type="number" id="timeout" value="{{ 300 if browser else 30 }}" min="5" max="300">
+                            <input type="number" id="timeout" value="{{ 600 if browser else 30 }}" min="5" max="{{ 600 if browser else 300 }}">
                             <span class="unit">seconds</span>
                         </div>
                     </div>

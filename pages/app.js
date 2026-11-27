@@ -299,7 +299,7 @@ async function request(path, options) {
         return json({success: false, message: 'Use filenames starting with a letter, digit or underscore.'});
     }
     if (job?.running) return json({success: false, message: 'An operation is already running.'});
-    const timeout = Math.min(300, Math.max(5, parseInt(project.timeout, 10) || 300));
+    const timeout = Math.min(600, Math.max(5, parseInt(project.timeout, 10) || 600));
     job = {id: crypto.randomUUID(), operation_type: resource, running: true, phase: 'Preparing the browser VM…'};
     void execute(job, project, timeout);
     return json({started: true, execution_id: job.id});

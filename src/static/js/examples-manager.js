@@ -148,7 +148,7 @@ class ExamplesManager {
                     'c': 'main.c',
                     'cpp': 'main.cpp',
                     'java': 'Main.java',
-                    'eiffel': 'main.e'
+                    'eiffel': window.codeforgeBrowser ? 'hello_world.e' : 'main.e'
                 };
                 filename = defaultNames[language] || 'main.txt';
             }
