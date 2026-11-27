@@ -27,7 +27,7 @@ class FileManager {
 
     initializeFirstFile() {
         // Get the default language from data attribute (most reliable)
-        let currentLanguage = 'python'; // fallback
+        let currentLanguage = 'eiffel'; // fallback
 
         if (this.dom.language) {
             // First try the data attribute
@@ -235,7 +235,7 @@ class FileManager {
     async addNewFile() {
         if (window.modalManager) {
             const existingFiles = Array.from(this.files.values()).map(f => f.name);
-            const currentLanguage = this.dom.language.value || 'python';
+            const currentLanguage = this.dom.language.value || 'eiffel';
             const filename = await window.modalManager.promptFilename('', existingFiles, currentLanguage);
             if (filename) {
                 const fileId = this.createFile(filename, '', null, true);
@@ -254,11 +254,11 @@ class FileManager {
     async promptForFilename() {
         if (window.modalManager) {
             const existingFiles = Array.from(this.files.values()).map(f => f.name);
-            const currentLanguage = this.dom.language.value || 'python';
+            const currentLanguage = this.dom.language.value || 'eiffel';
             return await window.modalManager.promptFilename('', existingFiles, currentLanguage);
         }
         // fallback to old prompt
-        const currentLanguage = this.dom.language.value || 'python';
+        const currentLanguage = this.dom.language.value || 'eiffel';
         const extension = this.getLanguageExtension(currentLanguage);
         let baseName = 'new_file';
         let counter = 1;
@@ -284,11 +284,6 @@ class FileManager {
 
     getDefaultFilename(language) {
         const defaultNames = {
-            'python': 'main.py',
-            'c': 'main.c',
-            'cpp': 'main.cpp',
-            'java': 'Main.java',
-            'javascript': 'main.js',
             'eiffel': 'main.e'
         };
 
@@ -327,11 +322,6 @@ class FileManager {
 
     getLanguageExtension(language) {
         const extensions = {
-            'python': 'py',
-            'c': 'c',
-            'cpp': 'cpp',
-            'java': 'java',
-            'javascript': 'js',
             'eiffel': 'e'
         };
 
@@ -350,28 +340,11 @@ class FileManager {
 
     getLanguageFromExtension(extension) {
         const extensionMap = {
-            'py': 'python',
-            'c': 'c',
-            'cpp': 'cpp',
-            'cc': 'cpp',
-            'cxx': 'cpp',
-            'cpp': 'cpp',
-            'h': 'c',
-            'hpp': 'cpp',
-            'hxx': 'cpp',
-            'java': 'java',
-            'js': 'javascript',
-            'jsx': 'javascript',
-            'ts': 'javascript',
-            'tsx': 'javascript',
             'e': 'eiffel',
             'ecf': 'eiffel',
-            'txt': 'python',  // Default for text files
-            'md': 'python',   // Default for markdown
-            '': 'python'      // Default for no extension
         };
 
-        return extensionMap[extension] || 'python'; // Default to python
+        return extensionMap[extension] || 'text';
     }
 
     // Get current active file info

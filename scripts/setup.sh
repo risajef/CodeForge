@@ -27,12 +27,6 @@ if ! command -v g++ &> /dev/null; then
     echo "G++ not found. Should be installed with build-essential..."
 fi
 
-# Check for Java
-if ! command -v javac &> /dev/null; then
-    echo "Java compiler not found. Installing OpenJDK..."
-    sudo apt install -y default-jdk
-fi
-
 # Check for Docker (optional)
 if ! command -v docker &> /dev/null; then
     echo "Docker not found. You can install it later for containerized execution."

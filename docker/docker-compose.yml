@@ -2,16 +2,18 @@ version: '3.8'
 
 services:
   web:
-    build: .
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
     ports:
       - "8000:8000"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock  # Docker socket for container management
-      - .:/app
+      - ..:/app
     working_dir: /app
     environment:
       - PYTHONPATH=/app
-    command: python main.py
+    command: python src/main.py
     depends_on:
       - docker-setup
     
@@ -19,8 +21,8 @@ services:
   docker-setup:
     build:
       context: .
-      dockerfile: Dockerfile.execution
-    image: code-executor:latest
+      dockerfile: Dockerfile.eiffel
+    image: code-executor-eiffel:latest
     command: /bin/true  # Just build the image and exit
 
 networks:

@@ -6,7 +6,13 @@
 <link rel="stylesheet" href="style.css">
 <main>
   <h1>Runtime sources</h1>
-  <p>The browser runs a Linux guest in QEMU WebAssembly, with the Eiffel compiler and AutoProof built from Reif.</p>
+  <p>Verify uses REIF, Boogie, and Z3 compiled to WebAssembly. Compile and Run use the Eiffel toolchain in a QEMU WebAssembly guest.</p>
+  <h2>Direct verifier</h2>
+  <ul>
+    <li><a href="https://github.com/risajef/reif/tree/9c99a9ec77a975cd865a496fe4b8407096b88c24">REIF and AutoProof source</a>, <a href="https://github.com/risajef/reif/tree/9c99a9ec77a975cd865a496fe4b8407096b88c24/research/browser">browser build instructions</a>, and <a href="https://github.com/risajef/reif/blob/9c99a9ec77a975cd865a496fe4b8407096b88c24/gpl.txt">GPL license</a></li>
+    <li><a href="https://github.com/boogie-org/boogie/tree/v2.11.1">Boogie 2.11.1</a>, <a href="https://www.npmjs.com/package/z3-solver/v/5.4.1">Z3 WebAssembly package</a>, and <a href="https://github.com/dotnet/runtime/tree/b455eab3a099cbec2bbd8e5b1b4703177c325284">.NET WebAssembly runtime</a></li>
+  </ul>
+  <h2>Browser VM</h2>
   <ul>
     <li><a href="https://github.com/risajef/CodeForge/tree/master/pages">CodeForge frontend and packaging scripts</a></li>
     <li><a href="https://github.com/risajef/CodeForge/blob/master/docker/Dockerfile.eiffel">Reif, Boogie and Z3 build recipe with pinned source revisions</a></li>

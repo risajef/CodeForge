@@ -1,9 +1,5 @@
 from typing import Dict, Type
 from .base import LanguageExecutor
-from .python_executor import PythonExecutor
-from .c_executor import CExecutor
-from .cpp_executor import CppExecutor
-from .java_executor import JavaExecutor
 from .eiffel_executor import EiffelExecutor
 from config_manager import get_config_manager
 
@@ -11,10 +7,6 @@ from config_manager import get_config_manager
 # Mapping of executor class names to actual classes
 _EXECUTOR_CLASSES: Dict[str, Type[LanguageExecutor]] = {
     "EiffelExecutor": EiffelExecutor,
-    "PythonExecutor": PythonExecutor,
-    "CExecutor": CExecutor,
-    "CppExecutor": CppExecutor,
-    "JavaExecutor": JavaExecutor,
 }
 
 

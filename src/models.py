@@ -95,19 +95,11 @@ class CompilerConfig(BaseModel):
 
 
 class ProgrammingLanguages(Enum):
-    c = "c"
-    cpp = "cpp"
-    python = "python"
-    java = "java"
     eiffel = "eiffel"
 
 
 class CodeExamples(BaseModel):
-    java: Dict[str, str]
-    cpp: Dict[str, str]
-    python: Dict[str, str]
     eiffel: Dict[str, str]
-    c: Dict[str, str]
 
 
 class SingleExample(BaseModel):

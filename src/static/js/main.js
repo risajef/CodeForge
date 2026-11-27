@@ -144,7 +144,7 @@ class CodeCompilerApp {
                         files = this.fileManager.getAllFiles().map(f => ({ name: f.name, content: f.content }));
                         activeFile = this.fileManager.getActiveFile()?.name || (files[0] && files[0].name);
                     } else {
-                        files = [{ name: 'main.' + lang, content: this.codeEditor.getCodeContent() }];
+                        files = [{ name: 'main.e', content: this.codeEditor.getCodeContent() }];
                         activeFile = files[0].name;
                     }
 
@@ -226,9 +226,9 @@ class CodeCompilerApp {
 
     loadProject(project) {
         if (!Array.isArray(project?.files) || !project.files.length) return false;
-        if (project.lang && [...this.dom.language.options].some(option => option.value === project.lang)) {
-            this.dom.language.value = project.lang;
-            this.codeEditor.updateCodeMirrorMode();
+        if (project.lang && !['eiffel', 'e'].includes(project.lang)) {
+            this.ui.updateStatus('This link contains a project in another language.', false);
+            return false;
         }
         this.fileManager.loadFiles(project.files, project.activeFile);
         this.examplesManager.updateExamplesDropdown();

@@ -11,10 +11,6 @@ class ExamplesManager {
         this.availableExamples = {};
 
         this.defaultExamples = {
-            'python': 'hello_world.py',
-            'c': 'hello_world.c',
-            'cpp': 'hello_world.cpp',
-            'java': 'HelloWorld.java',
             'eiffel': 'hello_world.e'
         };
     }
@@ -144,10 +140,6 @@ class ExamplesManager {
                 code = this.getPlaceholderCode(language);
                 // Use default filename for the language
                 const defaultNames = {
-                    'python': 'main.py',
-                    'c': 'main.c',
-                    'cpp': 'main.cpp',
-                    'java': 'Main.java',
                     'eiffel': window.codeforgeBrowser ? 'hello_world.e' : 'main.e'
                 };
                 filename = defaultNames[language] || 'main.txt';
@@ -183,10 +175,6 @@ class ExamplesManager {
             // Fallback to basic placeholder
             const fallbackCode = `// Enter your ${language} code here...`;
             const defaultNames = {
-                'python': 'main.py',
-                'c': 'main.c',
-                'cpp': 'main.cpp',
-                'java': 'Main.java',
                 'eiffel': 'main.e'
             };
             const filename = defaultNames[language] || 'main.txt';
@@ -211,14 +199,6 @@ class ExamplesManager {
         switch (language) {
             case 'eiffel':
                 return '-- Enter your Eiffel code here...\nclass\n\tHELLO_WORLD\n\ncreate\n\tmake\n\nfeature\n\tmake\n\t\t\t-- Print hello world message\n\t\tdo\n\t\t\tprint ("Hello, World!%N")\n\t\tend\n\nend';
-            case 'python':
-                return '# Enter your Python code here...\nprint("Hello, World!")';
-            case 'c':
-                return '// Enter your C code here...\n#include <stdio.h>\n\nint main() {\n    printf("Hello, World!\\n");\n    return 0;\n}';
-            case 'cpp':
-                return '// Enter your C++ code here...\n#include <iostream>\n\nint main() {\n    std::cout << "Hello, World!" << std::endl;\n    return 0;\n}';
-            case 'java':
-                return '// Enter your Java code here...\npublic class Main {\n    public static void main(String[] args) {\n        System.out.println("Hello, World!");\n    }\n}';
             default:
                 return '// Enter your code here...';
         }

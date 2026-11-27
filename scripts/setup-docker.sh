@@ -22,12 +22,12 @@ fi
 
 # Build the execution Docker image
 echo "Building Docker execution image..."
-docker build -f Dockerfile.execution -t code-executor:latest .
+"$(dirname "$0")/../docker/build-images.sh"
 
 if [ $? -eq 0 ]; then
     echo "Docker image built successfully!"
-    echo "You can now run the application with: python3 main.py"
-    echo "Or use Docker Compose with: docker-compose up"
+    echo "You can now run the application with: python3 src/main.py"
+    echo "Or use Docker Compose with: docker compose -f docker/docker-compose.yml up"
 else
     echo "Failed to build Docker image!"
     echo "Make sure Docker is running and try again."

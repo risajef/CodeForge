@@ -24,30 +24,36 @@ def test_cancel():
     """Test execution cancellation."""
     import time
 
-    # First, start a long-running Python process (infinite loop that prints)
-    files = [
-        {
-            "name": "long_running.py",
-            "content": """
-import time
-count = 0
-while True:
-    print(f"Running... {count}")
-    count += 1
-    time.sleep(0.5)
-    if count > 100:  # Safety net to prevent truly infinite execution in tests
-        break
+    files = [{
+        "name": "long_running.e",
+        "content": """class LONG_RUNNING
+create make
+feature
+    make
+        local
+            environment: EXECUTION_ENVIRONMENT
+        do
+            create environment
+            from until False loop
+                environment.sleep (500000000)
+            end
+        end
+end
 """,
-        }
-    ]
+    }]
+
+    assert client.get("/", cookies={"session_id": "eiffel-cancel-test"}).status_code == 200
+    project = {"files": files, "main_file": "long_running.e", "language": "eiffel"}
+    compile_resp = client.post("/compile", json=project)
+    assert compile_resp.json()["success"], compile_resp.json()
 
     # Start the execution
     run_resp = client.post(
         "/run",
         json={
             "files": files,
-            "main_file": "long_running.py",
-            "language": "python",
+            "main_file": "long_running.e",
+            "language": "eiffel",
             "timeout": "60",  # Give it 60 seconds timeout
         },
     )
@@ -71,7 +77,7 @@ while True:
     assert cancel_resp.status_code == 200
     cancel_data = cancel_resp.json()
     print(f"Cancel response: {cancel_data}")  # Debug print to see what's happening
-    assert cancel_data["success"] is False
+    assert cancel_data["success"] is True
     assert "cancel" in cancel_data["message"].lower()
 
     # Wait a moment for cancellation to take effect
@@ -92,24 +98,10 @@ def test_status():
 
 
 def test_session_info():
-    """Test session information retrieval."""
-    # First create a session by running some code to ensure session exists
-    files = [{"name": "test.py", "content": "print('test')"}]
-    session_id = "testsession_info"
-
-    # Create session by running code
-    run_resp = client.post(
-        "/run",
-        json={"language": "python", "files": files, "main_file": "test.py"},
-        cookies={"session_id": session_id},
-    )
-    assert run_resp.status_code == 200
-
-    # Now check session info
-    resp = client.get("/session/info", cookies={"session_id": session_id})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "container" in data or "session_id" in data  # Check for session info
+    assert client.get("/").status_code == 200
+    response = client.get("/session/info")
+    assert response.status_code == 200
+    assert "session_created" in response.json()
 
 
 def test_session_cleanup():
@@ -123,18 +115,18 @@ def test_examples_list():
     resp = client.get("/examples")
     assert resp.status_code == 200
     data = resp.json()
-    # Response contains language categories like 'python', 'java', etc.
-    assert any(lang in data for lang in ["python", "java", "c", "cpp"])
+    assert set(data) == {"eiffel"}
+    assert "account" in data["eiffel"]
 
 
 def test_examples_file():
-    resp = client.get("/examples/python/Hello%20World")
+    resp = client.get("/examples/eiffel/account")
     assert resp.status_code == 200
     data = resp.json()
     data = json.loads(decompress_token(data["url"][4:]))
     assert len(data["files"]) == 1
     data = data["files"][0]
-    assert "print" in data["content"]
+    assert "ACCOUNT" in data["content"]
 
 
 def test_admin_get_config():

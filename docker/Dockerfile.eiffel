@@ -116,7 +116,7 @@ COPY --from=build /reif/Src/Delivery/studio/spec/unix/prelink /opt/eiffel/studio
 COPY --from=build /reif/research/extension/autoproof/ /opt/eiffel/studio/tools/autoproof/
 COPY --from=browser-boogie-aot /out/BoogieDriver /opt/eiffel/studio/tools/boogie/boogie
 USER root
-RUN apt-get update && apt-get install -y --no-install-recommends openjdk-17-jdk-headless python3 \
+RUN apt-get update && apt-get install -y --no-install-recommends python3 \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /precomp
 # Build metadata in the same Eiffel layout used for every browser verification.

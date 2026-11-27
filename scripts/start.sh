@@ -27,7 +27,7 @@ else
 fi
 
 echo "🌐 Starting server at http://localhost:8000"
-echo "📂 Examples available for: Python, C, C++, Java"
+echo "📂 Eiffel examples available"
 echo "🛑 Press Ctrl+C to stop the server"
 echo ""
 

@@ -285,7 +285,7 @@ class ModalManager {
      * @param {string} language - Current language for extension suggestion
      * @returns {Promise<string|null>}
      */
-    promptFilename(defaultFilename = '', existingFilenames = [], language = 'python') {
+    promptFilename(defaultFilename = '', existingFilenames = [], language = 'eiffel') {
         const validator = (filename) => {
             // Check for empty filename
             if (!filename.trim()) {
@@ -308,11 +308,6 @@ class ModalManager {
 
         const getLanguageExtension = (lang) => {
             const extensions = {
-                'python': 'py',
-                'c': 'c',
-                'cpp': 'cpp',
-                'java': 'java',
-                'javascript': 'js',
                 'eiffel': 'e'
             };
             return extensions[lang] || 'txt';

@@ -68,23 +68,10 @@ def test_status():
 
 
 def test_session_info():
-    # First create a session by running some code to ensure session exists
-    code = "print('test')"
-    session_id = "testsession_info"
-
-    # Create session by running code
-    run_resp = client.post(
-        "/run",
-        data={"language": "python", "code": code},
-        cookies={"session_id": session_id},
-    )
-    assert run_resp.status_code == 200
-
-    # Now check session info
-    resp = client.get("/session/info", cookies={"session_id": session_id})
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "container" in data or "session_id" in data  # Check for session info
+    assert client.get("/").status_code == 200
+    response = client.get("/session/info")
+    assert response.status_code == 200
+    assert "session_created" in response.json()
 
 
 def test_session_cleanup():
@@ -96,18 +83,18 @@ def test_examples_list():
     resp = client.get("/examples")
     assert resp.status_code == 200
     data = resp.json()
-    # Response contains language categories like 'python', 'java', etc.
-    assert any(lang in data for lang in ["python", "java", "c", "cpp"])
+    assert set(data) == {"eiffel"}
+    assert "account" in data["eiffel"]
 
 
 def test_examples_file():
-    resp = client.get("/examples/python/Hello%20World")
+    resp = client.get("/examples/eiffel/account")
     assert resp.status_code == 200
     data = resp.json()
     data = json.loads(decompress_token(data["url"][4:]))
     assert len(data["files"]) == 1
     data = data["files"][0]
-    assert "print" in data["content"]
+    assert "ACCOUNT" in data["content"]
 
 
 def test_admin_get_config():

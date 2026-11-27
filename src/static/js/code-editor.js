@@ -8,11 +8,6 @@ class CodeEditorManager {
         this.dom = domElements;
         this.codeEditorCM = null;
         this.languageModes = {
-            'python': 'python',
-            'c': 'text/x-csrc',
-            'cpp': 'text/x-c++src',
-            'java': 'text/x-java',
-            'javascript': 'javascript',
             'eiffel': 'text/x-eiffel'
         };
 

@@ -85,16 +85,7 @@ class ContainerManager:
             raise RuntimeError(f"Docker is not available: {e}") from e
 
         self.active_containers: Dict[str, dict] = {}
-        # Language-specific Docker images
-        self.language_images = {
-            "python": "code-executor-python:latest",
-            "c": "code-executor-c:latest",
-            "cpp": "code-executor-cpp:latest",
-            "java": "code-executor-java:latest",
-            "eiffel": "code-executor-eiffel:latest",
-        }
-        # Fallback image name for backward compatibility
-        self.image_name = "code-executor:latest"
+        self.image_name = "code-executor-eiffel:latest"
 
         # Clean up any existing containers on startup
         logger.info("Cleaning up existing code execution containers on startup...")
@@ -112,17 +103,17 @@ class ContainerManager:
         """Build the Docker image for code execution."""
         try:
             dockerfile_path = (
-                Path(__file__).parent.parent / "docker" / "Dockerfile.execution"
+                Path(__file__).parent.parent / "docker" / "Dockerfile.eiffel"
             )
             if not dockerfile_path.exists():
-                logger.error("Dockerfile.execution not found")
+                logger.error("Dockerfile.eiffel not found")
                 return False
 
             logger.info("Building execution Docker image...")
             docker_dir = Path(__file__).parent.parent / "docker"
             self.client.images.build(
                 path=str(docker_dir),
-                dockerfile="Dockerfile.execution",
+                dockerfile="Dockerfile.eiffel",
                 tag=self.image_name,
                 rm=True,
                 forcerm=True,
@@ -133,16 +124,10 @@ class ContainerManager:
             logger.error("Failed to build Docker image: %s", e)
             return False
 
-    def get_image_for_language(self, language: str) -> str:
-        """Get the appropriate Docker image for a language."""
-        return self.language_images.get(language, self.image_name)
-
     def ensure_image_exists(self, language: str) -> bool:
         """Ensure the execution image exists, build if necessary."""
         try:
-            image_name = (
-                self.get_image_for_language(language) if language else self.image_name
-            )
+            image_name = self.image_name
             self.client.images.get(image_name)
             logger.info("Execution image %s already exists", image_name)
             return True
@@ -162,11 +147,11 @@ class ContainerManager:
             return False
 
     def create_session_container(
-        self, session_id: str, language: str = "python"
+        self, session_id: str, language: str = "eiffel"
     ) -> Optional[str]:
         """Create a new container for a user session."""
         try:
-            image_name = self.get_image_for_language(language)
+            image_name = self.image_name
             if not self.ensure_image_exists(language):
                 return None
 
@@ -226,10 +211,13 @@ class ContainerManager:
 
             container = self.active_containers[session_id]["container"]
 
-            # Kill all processes in the container (Alpine compatible)
+            # Stop the Eiffel toolchain and the compiled program.
             try:
                 container.exec_run(
-                    "pkill -f 'python3|gcc|g++|java|javac' || true",
+                    [
+                        "pkill", "-f",
+                        r"(^|/)(apb|ecb|boogie|z3|gcc|g\+\+|finish_freezing)( |$)|EIFGENs/.+/[WF]_code/",
+                    ],
                     user="coderunner",  # Run as coderunner user, not root
                 )
                 logger.info("Cancelled execution for session %s", session_id)

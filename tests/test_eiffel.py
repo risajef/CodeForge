@@ -7,7 +7,7 @@ import time
 
 
 def test_compile_and_run_eiffel():
-    """Test Eiffel compile-then-run workflow."""
+    """Compile and run an Eiffel project containing two classes."""
     files = [
         {
             "name": "hello_world.e",
@@ -20,12 +20,24 @@ create
 feature
     make
             -- Print hello world message
+        local
+            greeting: GREETING
         do
-            print ("Hello, Eiffel!%N")
+            create greeting
+            print (greeting.message)
         end
 
 end""",
-        }
+        },
+        {
+            "name": "greeting.e",
+            "content": """class GREETING
+
+feature
+    message: STRING = "Hello, Eiffel!%N"
+
+end""",
+        },
     ]
     session_client = create_session_client()
     compile_resp = session_client.post(
@@ -142,6 +154,7 @@ end""",
     # Use session client to maintain cookies and session
     session_client = create_session_client()
 
+    assert session_client.get("/", cookies={"session_id": "eiffel-performance-test"}).status_code == 200
     # First compilation - container needs to be created
     print("Starting first compilation (container creation)...")
     start_time_1 = time.time()

@@ -179,7 +179,7 @@ class URLCompression {
         if (params.has('code')) {
             try {
                 const code = decodeURIComponent(escape(atob(params.get('code'))));
-                const lang = params.get('lang') || 'python';
+                const lang = params.get('lang') || 'eiffel';
                 return {
                     lang: lang,
                     files: [{ name: `main.${this.getExtensionForLanguage(lang)}`, content: code }],
@@ -201,11 +201,6 @@ class URLCompression {
      */
     static getExtensionForLanguage(language) {
         const extensions = {
-            'python': 'py',
-            'c': 'c',
-            'cpp': 'cpp',
-            'java': 'java',
-            'javascript': 'js',
             'eiffel': 'e'
         };
         return extensions[language] || 'txt';

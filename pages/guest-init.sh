@@ -10,9 +10,7 @@ mount -t tmpfs -o uid=1000,gid=1000 tmpfs /workspace
 mkdir -p /dev/shm
 mount -t tmpfs -o mode=1777 tmpfs /dev/shm
 stty -echo
-for language in eiffel python c cpp java; do
-    install -d -o coderunner -g coderunner "/workspace/$language"
-done
+install -d -o coderunner -g coderunner /workspace/eiffel
 
 run_job() {
     runuser -u coderunner -- timeout -k 3 "$1" /usr/local/bin/codeforge-run "$2" "$3" "$4" \
@@ -32,7 +30,7 @@ while IFS=' ' read -r op value operation seconds main; do
     case "$op" in
         LANGUAGE)
             case "$value" in
-                eiffel|python|c|cpp|java) cd "/workspace/$value"; language=$value ;;
+                eiffel) cd "/workspace/$value"; language=$value ;;
                 *) status=1 ;;
             esac
             ;;

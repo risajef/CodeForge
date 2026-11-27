@@ -77,7 +77,7 @@ app = FastAPI(
 
     ## Features
 
-    * **Multi-language Support**: Compile and run Python, C, C++, Eiffel, and Java code
+    * **Eiffel**: Edit, compile, run, and verify Eiffel programs
     * **Docker Integration**: Secure code execution in isolated containers
     * **Session Management**: Track user sessions and container states
     * **Real-time Execution**: Monitor code execution with real-time status updates
@@ -155,11 +155,7 @@ async def get_home(request: Request, session_id: Optional[str] = Cookie(None)):
         session_id = new_session_id
     else:
         user_sessions[session_id].last_used = time.time()
-    languages = CONFIG["supported_languages"]
-    response = templates.TemplateResponse(
-        "index.html",
-        {"request": request, "languages": languages},
-    )
+    response = templates.TemplateResponse(request=request, name="index.html")
     response.set_cookie(
         key="session_id", value=session_id, httponly=True, max_age=86400
     )

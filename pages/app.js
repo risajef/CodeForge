@@ -1,11 +1,11 @@
 (() => {
 const runtime = './runtime-v7/';
+const verifier = document.querySelector('meta[name=codeforge-verifier]')?.content;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const sent = new Map();
 const storageKey = 'codeforge-project';
 const filenamePattern = /^[a-zA-Z0-9_][a-zA-Z0-9_.-]*$/;
-const languages = ['eiffel', 'python', 'c', 'cpp', 'java'];
 let vm;
 let send;
 let waiting;
@@ -198,6 +198,32 @@ async function enableIsolation(current, project, timeout, updatePhase) {
     await new Promise(() => {});
 }
 
+async function verifyInBrowser(current, files, timeout) {
+    current.phase = 'Loading AutoProof…';
+    const started = performance.now();
+    current.began = started;
+    const controller = new AbortController();
+    current.abort = () => controller.abort();
+    const [module, config] = await Promise.all([
+        import(verifier),
+        fetch('./autoproof.ecf', {signal: controller.signal}),
+    ]);
+    if (!config.ok) throw new Error('The AutoProof configuration is unavailable.');
+    const project = Object.fromEntries(files.map(({name, content}) => [name, content]));
+    project['Ace.ecf'] = await config.text();
+    current.phase = null;
+    const {code, lines} = await module.verifyProject(project, ['-batch', '-autoproof', '-html'], {
+        signal: controller.signal,
+        timeoutMs: Math.max(0, timeout * 1000 - (performance.now() - started)),
+    });
+    performance.measure('codeforge:verify', {start: started, end: performance.now()});
+    const proof = proofOutput(lines.join('\n'));
+    current.exit_code = code;
+    current.success = code === 0 && proof.failed === 0;
+    current.message = proof.message;
+    current.output = proof.output;
+}
+
 async function execute(current, project, timeout) {
     const {language, files, main_file} = project;
     const phase = message => { current.phase = message; };
@@ -205,6 +231,10 @@ async function execute(current, project, timeout) {
         await enableIsolation(current, {lang: language, files, activeFile: window.fileManager.getActiveFile()?.name},
             timeout, phase);
         if (current.cancelled) return;
+        if (current.operation_type === 'verify' && verifier) {
+            await verifyInBrowser(current, files, timeout);
+            return;
+        }
         await (vm ??= startVM(phase));
         if (current.cancelled) return;
         phase('Updating changed source files…');
@@ -250,10 +280,11 @@ async function execute(current, project, timeout) {
             current.output = current.operation_type === 'verify' ? proofOutput(output).output : output;
         }
     } catch (error) {
-        current.message = error.message;
+        current.message = current.cancelled ? 'Execution cancelled' : error.message;
         current.success = false;
     } finally {
         current.message ??= 'Execution cancelled';
+        delete current.abort;
         current.phase = null;
         current.running = false;
         current.completed = true;
@@ -301,17 +332,19 @@ async function request(path, options) {
     if (resource === 'cancel') {
         if (!job?.running || job.id !== options.body.get('execution_id')) return json({success: false, message: 'Execution already finished'});
         job.cancelled = true;
+        job.abort?.();
         return json({success: true, pending: true, message: 'Cancelling…'});
     }
     const project = JSON.parse(options.body);
     const {language, files, main_file} = project;
-    if (!languages.includes(language) || !files.length || !files.every(file => filenamePattern.test(file.name))
+    if (language !== 'eiffel') return json({success: false, message: 'Select an Eiffel project.'});
+    if (!files.length || !files.every(file => filenamePattern.test(file.name))
         || !files.some(file => file.name === main_file)) {
         return json({success: false, message: 'Use filenames starting with a letter, digit or underscore.'});
     }
     if (job?.running) return json({success: false, message: 'An operation is already running.'});
     const timeout = Math.min(600, Math.max(5, parseInt(project.timeout, 10) || 600));
-    job = {id: crypto.randomUUID(), operation_type: resource, running: true, phase: 'Preparing the browser VM…'};
+    job = {id: crypto.randomUUID(), operation_type: resource, running: true, phase: 'Preparing Eiffel…'};
     void execute(job, project, timeout);
     return json({started: true, execution_id: job.id});
 }
@@ -320,7 +353,7 @@ function restoreProject(params) {
     if (params.has('files') || params.has('code')) return null;
     try {
         const stored = JSON.parse(localStorage.getItem(storageKey));
-        if (stored?.files?.length) return stored;
+        if (stored?.lang === 'eiffel' && stored.files?.length) return stored;
         const previous = JSON.parse(localStorage.getItem('codeforge-eiffel-files'));
         if (previous?.length) return {lang: 'eiffel', files: previous.map(([name, content]) => ({name, content}))};
     } catch {
