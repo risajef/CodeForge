@@ -106,7 +106,6 @@ COPY --from=browser-boogie-aot /out/BoogieDriver /Eiffel_24.05/studio/tools/boog
 FROM runtime-base AS browser-pages
 ENV ISE_EIFFEL=/opt/eiffel ISE_LIBRARY=/opt/eiffel
 COPY --from=browser-files /browser-bin/ /usr/local/bin/
-COPY --from=browser-files /browser-precomp /precomp
 COPY --from=build /reif/gpl.txt /opt/eiffel/LICENSE
 COPY --from=build /reif/Src/library /opt/eiffel/library
 COPY --from=build /reif/Src/Delivery/studio/built_ins /opt/eiffel/studio/built_ins
@@ -116,6 +115,13 @@ COPY --from=build /reif/Src/Delivery/studio/help /opt/eiffel/studio/help
 COPY --from=build /reif/Src/Delivery/studio/spec/unix/prelink /opt/eiffel/studio/spec/linux-x86-64/bin/prelink
 COPY --from=build /reif/research/extension/autoproof/ /opt/eiffel/studio/tools/autoproof/
 COPY --from=browser-boogie-aot /out/BoogieDriver /opt/eiffel/studio/tools/boogie/boogie
+USER root
+WORKDIR /precomp
+# Build metadata in the same Eiffel layout used for every browser verification.
+RUN apb -config /library/base/base.ecf -target base -precompile -batch \
+    && test -s /precomp/EIFGENs/base/precomp.eif
+WORKDIR /workspace
+USER coderunner
 
 # Keep the complete EiffelStudio distribution in the default image.
 FROM runtime-base AS runtime
