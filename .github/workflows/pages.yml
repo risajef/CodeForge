@@ -28,7 +28,7 @@ jobs:
           mkdir -p dist/runtime-v2
           cp pages/{index.html,style.css,app.js,coi.js,sources.html} dist/
           gh release download pages-runtime-v2 --pattern '*.tar' --dir "${RUNNER_TEMP}"
-          tar -xf "${RUNNER_TEMP}/codeforge-pages-runtime.tar" -C dist/runtime-v2
+          tar -xf "${RUNNER_TEMP}/codeforge-pages-runtime-v2.tar" -C dist/runtime-v2
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist
