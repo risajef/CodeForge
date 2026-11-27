@@ -8,7 +8,7 @@ Enable **Settings → Pages → GitHub Actions** and run the workflow.
 gh workflow run pages.yml
 ~~~
 
-The workflow bundles the editor, examples, VM, and direct Wasm verifier. The runtime bundles come from GitHub releases.
+The workflow bundles the editor, examples, and Wasm toolchain. It gets the bundles from GitHub releases.
 
 ## Update the browser runtime
 
@@ -23,12 +23,12 @@ For a local preview, install Jinja2 and run `python3 pages/assemble.py dist`. Co
 
 Upload the archive to a new release and update the runtime version in `pages/app.js` and `.github/workflows/pages.yml` before deploying.
 
-## Direct Wasm verifier
+## Direct Wasm toolchain
 
-Build the verifier with [REIF's browser build scripts](https://github.com/risajef/reif/tree/Exp-browser-autoproof/research/browser). For a local preview, pass its output directory to the assembler.
+Use [REIF's browser build scripts](https://github.com/risajef/reif/tree/9c99a9ec77a975cd865a496fe4b8407096b88c24/research/browser) for the compiler and verifier. Apply the [execution patch](https://github.com/risajef/CodeForge/releases/download/pages-verifier-v2/reif-browser-execution.patch) and run `research/browser/build-execution.sh /tmp/reif-browser` from the REIF checkout to include Compile and Run. For a local preview, pass the output directory to the assembler.
 
 ~~~sh
 python3 pages/assemble.py dist --wasm-runtime /tmp/reif-browser
 ~~~
 
-To update the verifier, archive its contents as `codeforge-wasm-verifier.tar`, attach it to a CodeForge release, and update the default tag in `.github/workflows/pages.yml`. To test a different release once, pass its tag as `verifier_release`. **Compile** and **Run** use the VM release configured above.
+To update the toolchain, archive its contents as `codeforge-wasm-verifier.tar`, attach it to a CodeForge release, and update the default tag in `.github/workflows/pages.yml`. To test a different release once, pass its tag as `verifier_release`.

@@ -7,7 +7,7 @@ on:
         description: CodeForge release containing the direct Wasm verifier
         type: string
         required: false
-        default: pages-verifier-v1
+        default: pages-verifier-v2
 
 permissions:
   contents: read
@@ -33,13 +33,13 @@ jobs:
       - name: Assemble the static site
         env:
           GH_TOKEN: ${{ github.token }}
-          VERIFIER_RELEASE: ${{ inputs.verifier_release || 'pages-verifier-v1' }}
+          VERIFIER_RELEASE: ${{ inputs.verifier_release || 'pages-verifier-v2' }}
         run: |
           python -m pip install Jinja2==3.1.6
           mkdir -p "${RUNNER_TEMP}/wasm-verifier"
           gh release download "$VERIFIER_RELEASE" --pattern 'codeforge-wasm-verifier.tar' --dir "${RUNNER_TEMP}"
           tar -xf "${RUNNER_TEMP}/codeforge-wasm-verifier.tar" -C "${RUNNER_TEMP}/wasm-verifier"
-          python pages/assemble.py dist --wasm-runtime "${RUNNER_TEMP}/wasm-verifier"
+          python pages/assemble.py dist --wasm-runtime "${RUNNER_TEMP}/wasm-verifier" --wasm-version "$VERIFIER_RELEASE"
           mkdir -p dist/runtime-v7
           gh release download pages-runtime-v7 --pattern '*.tar' --dir "${RUNNER_TEMP}"
           tar -xf "${RUNNER_TEMP}/codeforge-pages-runtime-v7.tar" -C dist/runtime-v7

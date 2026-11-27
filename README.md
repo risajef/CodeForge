@@ -5,7 +5,7 @@
 1. Choose an example and click **Load Example**.
 2. Click **Run** or **Verify**. Use **Share Code URL** to send the whole project.
 
-The browser caches the VM used for **Compile** and **Run**. Deployments can bundle the direct WebAssembly verifier for **Verify**.
+The GitHub Pages editor compiles, runs, and verifies Eiffel using WebAssembly workers.
 
 ## Run locally
 

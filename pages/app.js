@@ -1,6 +1,7 @@
 (() => {
 const runtime = './runtime-v7/';
 const verifier = document.querySelector('meta[name=codeforge-verifier]')?.content;
+const execution = document.querySelector('meta[name=codeforge-execution]')?.content;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const sent = new Map();
@@ -13,6 +14,7 @@ let terminalLine = '';
 let result;
 let job;
 let examples;
+let compiledProject;
 
 function getScript(url) {
     return new Promise((resolve, reject) => {
@@ -161,7 +163,7 @@ async function syncProject(language, files) {
     }
 }
 
-function proofOutput(output) {
+function proofOutput(output, exitCode) {
     const report = new DOMParser().parseFromString(output, 'text/html');
     const table = document.createElement('table');
     let count = 0;
@@ -177,7 +179,8 @@ function proofOutput(output) {
     if (count) return {output: table.outerHTML, message: count + ' proof results · ' + failed + ' failed', failed};
     const log = document.createElement('pre');
     log.textContent = output;
-    return {output: log.outerHTML, message: 'AutoProof returned no proof results.', failed: 1};
+    const message = exitCode === 0 ? 'AutoProof returned no proof results.' : 'Verification stopped. See the compiler output.';
+    return {output: log.outerHTML, message, failed: 1};
 }
 
 async function enableIsolation(current, project, timeout, updatePhase) {
@@ -199,7 +202,7 @@ async function enableIsolation(current, project, timeout, updatePhase) {
 }
 
 async function verifyInBrowser(current, files, timeout) {
-    current.phase = 'Loading AutoProof…';
+    current.phase = 'Checking Eiffel…';
     const started = performance.now();
     current.began = started;
     const controller = new AbortController();
@@ -211,23 +214,71 @@ async function verifyInBrowser(current, files, timeout) {
     if (!config.ok) throw new Error('The AutoProof configuration is unavailable.');
     const project = Object.fromEntries(files.map(({name, content}) => [name, content]));
     project['Ace.ecf'] = await config.text();
-    current.phase = null;
     const {code, lines} = await module.verifyProject(project, ['-batch', '-autoproof', '-html'], {
         signal: controller.signal,
         timeoutMs: Math.max(0, timeout * 1000 - (performance.now() - started)),
+        onPhase: phase => { current.phase = phase; },
     });
     performance.measure('codeforge:verify', {start: started, end: performance.now()});
-    const proof = proofOutput(lines.join('\n'));
+    const proof = proofOutput(lines.join('\n'), code);
     current.exit_code = code;
     current.success = code === 0 && proof.failed === 0;
     current.message = proof.message;
     current.output = proof.output;
 }
 
+async function executeWasm(current, files, mainFile, timeout) {
+    const source = files.find(file => file.name === mainFile)?.content.replace(/--[^\n]*/g, '');
+    const declaration = source?.match(/^\s*(?:(?:deferred|expanded|frozen)\s+)?class\s+(\w+)/im);
+    if (!declaration) throw new Error('Select an Eiffel class as the first file.');
+    const rest = source.slice(declaration.index + declaration[0].length);
+    const creation = rest.match(/^\s*create\b\s*(?:\{[^}]*\}\s*)?(\w+)/im);
+    const root = '<root class="' + declaration[1] + '" feature="' + (creation?.[1] ?? 'default_create') + '"/>';
+
+    current.phase = 'Loading the Eiffel compiler…';
+    const started = performance.now();
+    current.began = started;
+    const controller = new AbortController();
+    current.abort = () => controller.abort();
+    const options = {
+        signal: controller.signal,
+        onPhase: phase => { current.phase = phase; },
+    };
+    const remaining = () => Math.max(0, timeout * 1000 - (performance.now() - started));
+    const module = await import(execution);
+    const key = JSON.stringify([mainFile, files]);
+    let result = compiledProject?.key === key ? compiledProject.result : null;
+    if (!result) {
+        const config = await fetch('./autoproof.ecf', {signal: controller.signal});
+        if (!config.ok) throw new Error('The Eiffel project configuration is unavailable.');
+        const project = Object.fromEntries(files.map(({name, content}) => [name, content]));
+        project['Ace.ecf'] = (await config.text()).replace('<root all_classes="true"/>', root);
+        result = await module.compileProject(project, ['-config', 'Ace.ecf'], {...options, timeoutMs: remaining()});
+        performance.measure('codeforge:compile', {start: started, end: performance.now()});
+        if (result.code === 0) compiledProject = {key, result};
+    }
+    if (result.code !== 0 || current.operation_type === 'compile') {
+        current.message = result.code === 0 ? 'Compilation succeeded' : 'Compilation failed';
+    } else {
+        current.phase = 'Running Eiffel…';
+        const programStart = performance.now();
+        result = await module.runProgram(result.wasm, {...options, timeoutMs: remaining()});
+        performance.measure('codeforge:run', {start: programStart, end: performance.now()});
+        current.message = result.code === 0 ? 'Execution completed' : 'Execution failed';
+    }
+    current.exit_code = result.code;
+    current.success = result.code === 0;
+    current.output = result.lines.join('\n');
+}
+
 async function execute(current, project, timeout) {
     const {language, files, main_file} = project;
     const phase = message => { current.phase = message; };
     try {
+        if (current.operation_type !== 'verify' && execution) {
+            await executeWasm(current, files, main_file, timeout);
+            return;
+        }
         await enableIsolation(current, {lang: language, files, activeFile: window.fileManager.getActiveFile()?.name},
             timeout, phase);
         if (current.cancelled) return;
@@ -267,7 +318,7 @@ async function execute(current, project, timeout) {
         } else if (code === 124 || code === 137) {
             current.message = 'Execution timed out';
         } else if (current.operation_type === 'verify') {
-            const proof = proofOutput(output);
+            const proof = proofOutput(output, code);
             current.message = proof.message;
             current.success = current.success && proof.failed === 0;
             current.output = proof.output;
@@ -277,7 +328,7 @@ async function execute(current, project, timeout) {
                 : (current.success ? 'Execution completed' : 'Execution failed');
         }
         if (current.output === undefined) {
-            current.output = current.operation_type === 'verify' ? proofOutput(output).output : output;
+            current.output = current.operation_type === 'verify' ? proofOutput(output, code).output : output;
         }
     } catch (error) {
         current.message = current.cancelled ? 'Execution cancelled' : error.message;

@@ -20,8 +20,9 @@ Workers keep the editor responsive. The bridge passes Boogie output and models b
 
 ## Execution and hosting
 
-- **Verify** uses the direct Wasm bundle when included during Pages assembly. A deployment without that bundle uses the VM verifier.
-- **Compile** and **Run** use Eiffel's generated C and native toolchain inside the browser VM. The browser caches the versioned VM.
+- **Verify** starts Boogie and Z3 while REIF checks Eiffel and generates the Boogie program.
+- **Compile** runs REIF, then Clang and LLD in browser workers. The output is a Wasm module linked against the Eiffel runtime. **Run** executes that module in a separate worker. The editor reuses the last compiled module until its inputs change.
+- Pages builds that omit either Wasm component use the versioned VM for the corresponding operation. The browser caches the VM on first use.
 - The standalone FastAPI deployment runs the Eiffel toolchain in per-session Docker containers.
 
 See [deployment](DEPLOYMENT.md) and [REIF's browser implementation](https://github.com/risajef/reif/tree/Exp-browser-autoproof/research/browser).

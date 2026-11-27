@@ -4,7 +4,10 @@
 <head>
     <meta charset="UTF-8">
     {% if wasm_verifier %}
-    <meta name="codeforge-verifier" content="./wasm-verifier/verify-project.mjs">
+    <meta name="codeforge-verifier" content="{{ wasm_verifier }}">
+    {% endif %}
+    {% if wasm_execution %}
+    <meta name="codeforge-execution" content="{{ wasm_execution }}">
     {% endif %}
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>CodeForge | Constructor Institute</title>
@@ -222,7 +225,7 @@
     </div>
 
     {% if browser %}
-    <script src="./app.js"></script>
+    <script src="./app.js{% if wasm_version %}?v={{ wasm_version }}{% endif %}"></script>
     {% endif %}
     <!-- CodeMirror JavaScript -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
