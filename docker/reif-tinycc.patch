@@ -1,0 +1,32 @@
+--- a/Src/C/run-time/eif_atomops.h
++++ b/Src/C/run-time/eif_atomops.h
+@@ -106,6 +106,29 @@
+ #	define RTS_AA_I32(dest, val)             atomic_add_32_nv ((volatile uint32_t*) dest, val)
+ #	define RTS_AS_PTR(dest, setter)          atomic_swap_ptr (dest, setter)
+ #	define EIF_HAS_ATOMIC
++#elif defined(__TINYC__) && defined(__x86_64__) && EIF_OS == EIF_OS_LINUX
++# include <stdint.h>
++# include <stdbool.h>
++
++/* TinyCC uses libatomic's sized ABI for sequentially consistent atomics. */
++enum { EIF_TCC_ATOMIC_SEQ_CST = 5 };
++
++extern bool __atomic_compare_exchange_4(volatile void *, void *, uint32_t, int, int);
++extern uint32_t __atomic_exchange_4(volatile void *, uint32_t, int);
++extern uint64_t __atomic_exchange_8(volatile void *, uint64_t, int);
++extern uint32_t __atomic_add_fetch_4(volatile void *, uint32_t, int);
++
++static inline int32_t eif_tcc_compare_exchange_i32(volatile void *dest, int32_t value, int32_t expected)
++{
++    __atomic_compare_exchange_4(dest, &expected, (uint32_t)value, EIF_TCC_ATOMIC_SEQ_CST, EIF_TCC_ATOMIC_SEQ_CST);
++    return expected;
++}
++
++# define RTS_ACAS_I32(dest,setter,compare) eif_tcc_compare_exchange_i32(dest, setter, compare)
++# define RTS_AS_I32(dest,setter) ((int32_t)__atomic_exchange_4(dest, (uint32_t)(setter), EIF_TCC_ATOMIC_SEQ_CST))
++# define RTS_AA_I32(dest,val) ((int32_t)__atomic_add_fetch_4(dest, (uint32_t)(val), EIF_TCC_ATOMIC_SEQ_CST))
++# define RTS_AS_PTR(dest,setter) ((void *)(uintptr_t)__atomic_exchange_8(dest, (uintptr_t)(setter), EIF_TCC_ATOMIC_SEQ_CST))
++# define EIF_HAS_ATOMIC
+ #else
+ #	error "Missing atomic compare-exchange functionality."
+ #endif

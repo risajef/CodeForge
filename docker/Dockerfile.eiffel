@@ -149,6 +149,11 @@ RUN mkdir pattern-cache \
     && strip --strip-debug EIFGENs/base/W_code/driver EIFGENs/base/W_code/preobj.o \
     && rm -rf EIFGENs/base/W_code/C[0-9]* EIFGENs/base/W_code/E[0-9]* /opt/eiffel/library \
     && ln -s /library /opt/eiffel/library
+COPY reif-tinycc.patch /tmp/reif-tinycc.patch
+RUN apt-get update && apt-get install -y --no-install-recommends mold tcc \
+    && rm -rf /var/lib/apt/lists/* \
+    && patch -d /opt/eiffel/studio/spec/linux-x86-64/include -p4 < /tmp/reif-tinycc.patch \
+    && rm /tmp/reif-tinycc.patch
 WORKDIR /workspace
 USER coderunner
 
