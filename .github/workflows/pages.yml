@@ -25,10 +25,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          mkdir -p dist/runtime
+          mkdir -p dist/runtime-v2
           cp pages/{index.html,style.css,app.js,coi.js,sources.html} dist/
-          gh release download pages-runtime-v1 --pattern '*.tar' --dir "${RUNNER_TEMP}"
-          tar -xf "${RUNNER_TEMP}/codeforge-pages-runtime.tar" -C dist/runtime
+          gh release download pages-runtime-v2 --pattern '*.tar' --dir "${RUNNER_TEMP}"
+          tar -xf "${RUNNER_TEMP}/codeforge-pages-runtime.tar" -C dist/runtime-v2
       - uses: actions/upload-pages-artifact@v3
         with:
           path: dist

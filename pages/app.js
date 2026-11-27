@@ -84,7 +84,7 @@ function receive(data) {
         if (line.startsWith('CF_RESULT ')) {
             report = new TextDecoder().decode(Uint8Array.from(atob(line.slice(10)), c => c.charCodeAt(0)));
         } else if (!line.startsWith('CF_') && line.trim()) {
-            byId('output').textContent += line + '\n';
+            byId('output').append(line + '\n');
         }
         waiting?.(line);
     }
@@ -92,7 +92,7 @@ function receive(data) {
 
 async function startVM() {
     setStatus('Downloading the Eiffel VM. The first download is about 400 MiB.');
-    await Promise.all([getScript('./runtime/xterm.js'), getScript('./runtime/pty.js')]);
+    await Promise.all([getScript('./runtime-v2/xterm.js'), getScript('./runtime-v2/pty.js')]);
     const term = new Terminal();
     term.write = (data, done) => { receive(data); done?.(); };
     const {master, slave} = openpty();
@@ -102,13 +102,13 @@ async function startVM() {
     slave.onReadable(() => callbacks.splice(0).forEach(callback => callback()));
     const config = {
         pty: slave,
-        mainScriptUrlOrBlob: new URL('./runtime/out.js', location.href).href,
-        locateFile: file => new URL('./runtime/' + file, location.href).href,
+        mainScriptUrlOrBlob: new URL('./runtime-v2/out.js', location.href).href,
+        locateFile: file => new URL('./runtime-v2/' + file, location.href).href,
         preRun: [],
     };
     window.Module = config;
-    await getScript('./runtime/load.js');
-    const disk = await fetch('./runtime/eiffel.ext4.gz');
+    await getScript('./runtime-v2/load.js');
+    const disk = await fetch('./runtime-v2/eiffel.ext4.gz');
     if (!disk.ok) throw new Error('The Eiffel VM download is unavailable.');
     const bytes = new Uint8Array(await new Response(
         disk.body.pipeThrough(new DecompressionStream('gzip')),
@@ -134,7 +134,7 @@ async function startVM() {
         '-kernel', '/pack/bzImage',
         '-append', 'console=ttyS0 root=/dev/vda rootwait ro init=/usr/local/sbin/codeforge-init loglevel=4',
     ];
-    const {default: initialize} = await import('./runtime/out.js');
+    const {default: initialize} = await import('./runtime-v2/out.js');
     const ready = response(line => line.endsWith('CF_READY'), 120000);
     setStatus('Starting the Eiffel VM…');
     await Promise.all([ready, initialize(config)]);
@@ -166,6 +166,7 @@ byId('verify').onclick = async () => {
     byId('output').textContent = '';
     try {
         await (vm ??= startVM());
+        setStatus('Updating changed source files…');
         const snapshot = new Map(project);
         for (const name of sent.keys()) {
             if (!snapshot.has(name)) {

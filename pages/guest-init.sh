@@ -1,6 +1,6 @@
 #!/bin/sh
 set -eu
-export ISE_EIFFEL=/opt/eiffel ISE_LIBRARY=/ ISE_PLATFORM=linux-x86-64
+export ISE_EIFFEL=/opt/eiffel ISE_LIBRARY=/opt/eiffel ISE_PLATFORM=linux-x86-64
 export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys

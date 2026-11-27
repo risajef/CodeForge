@@ -209,4 +209,4 @@ verifications and only transfers files that changed. The VM resets on page reloa
 source-built `browser-pages` runner with QEMU assets from container2wasm
 v0.8.5 (`c2w --external-bundle --to-js`). It requires an x86-64 image builder
 and `mke2fs` with tar input support. The GitHub Pages action serves the runtime
-archive from the `pages-runtime-v1` release alongside the static UI.
+archive from the `pages-runtime-v2` release alongside the static UI.
