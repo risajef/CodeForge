@@ -114,7 +114,7 @@ async function startVM(updatePhase) {
         };
     });
     config.arguments = [
-        '-nographic', '-m', '768M', '-smp', '1', '-accel', 'tcg,tb-size=128,thread=multi',
+        '-nographic', '-m', '1024M', '-smp', '1', '-accel', 'tcg,tb-size=128,thread=multi',
         '-L', '/pack', '-nic', 'none',
         '-drive', 'if=virtio,format=raw,readonly=on,file=/pack/eiffel.ext4',
         '-kernel', '/pack/bzImage',
@@ -126,8 +126,8 @@ async function startVM(updatePhase) {
     await Promise.all([ready, initialize(config)]);
 }
 
-async function command(input) {
-    const reply = response(line => /^CF_ACK \d+$/.test(line), 15000);
+async function command(input, timeout = 15000) {
+    const reply = response(line => /^CF_ACK \d+$/.test(line), timeout);
     send(input);
     if (await reply !== 'CF_ACK 0') throw new Error('The VM could not complete ' + input.split(' ')[0] + '.');
 }
@@ -215,7 +215,7 @@ async function execute(current, project, timeout) {
                 await command('CANCEL');
                 cancelSent = true;
             }
-            await command('RESULT');
+            await command('RESULT', 90000);
             if (!result) await new Promise(resolve => setTimeout(resolve, 250));
         }
         const {code, output} = result;
